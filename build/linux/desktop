@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A PocketMind application
+Name=PocketMind
+Comment=Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/pocketmind %u
 Terminal=false
