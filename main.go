@@ -31,6 +31,12 @@ func main() {
 		log.Printf("pocketmind: could not load settings, using defaults: %v", err)
 		settings = config.Default()
 	}
+
+	// Seed the tray menu locale from saved settings before the menu is built.
+	if settings.Language == "zh-CN" || settings.Language == "en" {
+		menuLang = settings.Language
+	}
+
 	engine = breakengine.New(settings)
 
 	app = application.New(application.Options{

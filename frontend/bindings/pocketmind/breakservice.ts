@@ -20,6 +20,14 @@ import * as breakengine$0 from "./internal/breakengine/models.js";
 import * as config$0 from "./internal/config/models.js";
 
 /**
+ * CompleteOnboarding marks onboarding done and starts the engine for the first
+ * focus cycle. Called once the user finishes the first-run setup screen.
+ */
+export function CompleteOnboarding(): $CancellablePromise<void> {
+    return $Call.ByID(1404130892);
+}
+
+/**
  * GetSettings returns the current settings.
  */
 export function GetSettings(): $CancellablePromise<config$0.Settings> {
@@ -83,4 +91,18 @@ export function SkipBreak(): $CancellablePromise<void> {
  */
 export function StartBreakNow(): $CancellablePromise<void> {
     return $Call.ByID(2949039075);
+}
+
+/**
+ * StartEngine starts the countdown (used after a manual stop or pause).
+ */
+export function StartEngine(): $CancellablePromise<void> {
+    return $Call.ByID(1005774672);
+}
+
+/**
+ * StopEngine halts the countdown entirely.
+ */
+export function StopEngine(): $CancellablePromise<void> {
+    return $Call.ByID(729946672);
 }

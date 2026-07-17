@@ -5,18 +5,21 @@ import "github.com/wailsapp/wails/v3/pkg/application"
 const prefsWindowName = "pm-prefs"
 
 // preferencesOptions describes the settings window: a translucent, dark,
-// frameless-inset window centered on the primary display.
+// frameless-inset window centered on the primary display. The window itself
+// carries the macOS vibrancy; the web page paints an opaque dark surface on
+// top so text stays readable over any wallpaper.
 func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
 		Title:            "PocketMind",
-		Width:            480,
-		Height:           620,
-		MinWidth:         420,
-		MinHeight:        520,
+		Width:            520,
+		Height:           680,
+		MinWidth:         460,
+		MinHeight:        560,
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,
-		BackgroundColour: application.NewRGB(6, 7, 15),
+		BackgroundType:   application.BackgroundTypeTranslucent,
+		BackgroundColour: application.NewRGBA(14, 16, 28, 255),
 		Mac: application.MacWindow{
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,

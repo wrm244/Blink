@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
+import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import type { Settings } from '../../bindings/pocketmind/internal/config/models'
 import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
+import { Eye, Play, Pause, SkipForward, Clock, RotateCcw, Bell, Languages, Check } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { setLocale, type Locale } from '@/i18n'
 
-// `s` mirrors the backend settings; edits are local until Save is pressed.
-// Settings is a generated interface, so we build a plain typed object rather
-// than constructing a class.
+const { t, locale } = useI18n()
+
 const s = reactive({} as Settings)
 const state = ref<State>({} as State)
 const dirty = ref(false)
@@ -23,17 +34,34 @@ onMounted(async () => {
 })
 onUnmounted(() => off?.())
 
+const onboarded = computed(() => s.onboarded === true)
+const engineRunning = computed(() => state.value.phase !== 'paused' && state.value.phase !== '')
+
 function touch() {
   dirty.value = true
   saved.value = false
 }
 
+// Language is applied live and persisted locally; persisted to the backend on
+// Save so the tray menu can be localised too.
+function changeLanguage(v: string) {
+  setLocale(v as Locale)
+  locale.value = v
+  touch()
+}
+
 async function save() {
-  // Spread to a plain object so the value matches the Settings interface
-  // exactly (the reactive proxy type is not directly assignable to the param).
   await BreakService.SaveSettings({ ...s })
   dirty.value = false
   saved.value = true
+}
+
+async function completeOnboarding() {
+  // Persist current settings with onboarded=true, then start the engine.
+  s.onboarded = true
+  await BreakService.SaveSettings({ ...s })
+  await BreakService.CompleteOnboarding()
+  dirty.value = false
 }
 
 function startBreak() { BreakService.StartBreakNow() }
@@ -44,16 +72,37 @@ function togglePause() {
   if (state.value.paused) BreakService.Resume()
   else BreakService.Pause()
 }
+function toggleEngine() {
+  if (engineRunning.value) BreakService.Pause()
+  else BreakService.Resume()
+}
+
+// Slider values are bound as number[] (reka-ui Slider contract); convert.
+function num(v: number[] | undefined, fallback: number): number[] {
+  return v && v.length ? v : [fallback]
+}
+function setNum(field: keyof Settings, v: number[] | undefined) {
+  ;(s as any)[field] = v?.[0] ?? 0
+  touch()
+}
 
 const phaseLabel = computed(() => {
   switch (state.value.phase) {
-    case 'focusing': return `Focusing · ${fmt(state.value.remainingSec)} to break`
-    case 'prebreak': return `Break in ${state.value.remainingSec}s`
-    case 'shortbreak': return `Short break · ${fmt(state.value.remainingSec)}`
-    case 'longbreak': return `Long break · ${fmt(state.value.remainingSec)}`
-    case 'paused': return 'Paused'
-    case 'idle': return 'Paused (inactive)'
-    default: return '-'
+    case 'focusing': return t('status.focusing', { time: fmt(state.value.remainingSec) })
+    case 'prebreak': return t('status.prebreak', { sec: state.value.remainingSec })
+    case 'shortbreak': return t('status.shortbreak', { time: fmt(state.value.remainingSec) })
+    case 'longbreak': return t('status.longbreak', { time: fmt(state.value.remainingSec) })
+    case 'paused': return t('status.paused')
+    case 'idle': return t('status.idle')
+    default: return t('status.waiting')
+  }
+})
+const phaseColor = computed(() => {
+  switch (state.value.phase) {
+    case 'shortbreak': case 'longbreak': return 'oklch(0.72 0.17 145)'
+    case 'prebreak': return 'oklch(0.78 0.16 70)'
+    case 'paused': case 'idle': return 'oklch(0.66 0.01 264)'
+    default: return 'oklch(0.62 0.17 255)'
   }
 })
 function fmt(sec: number): string {
@@ -64,236 +113,293 @@ function fmt(sec: number): string {
 </script>
 
 <template>
-  <div class="prefs">
-    <header class="prefs__header">
-      <div>
-        <h1 class="prefs__title">PocketMind</h1>
-        <p class="prefs__status">{{ phaseLabel }}</p>
+  <div class="prefs-root">
+    <!-- Header -->
+    <header class="flex items-center justify-between gap-3 px-7 pt-12 pb-2">
+      <div class="flex items-center gap-3">
+        <div class="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
+          <Eye class="size-5" />
+        </div>
+        <div>
+          <h1 class="text-[17px] font-semibold tracking-tight leading-tight">{{ t('app.name') }}</h1>
+          <p class="flex items-center gap-1.5 text-[12px] text-muted-foreground mt-0.5">
+            <span class="size-1.5 rounded-full" :style="{ background: phaseColor, boxShadow: `0 0 6px ${phaseColor}` }" />
+            <span class="tabular-nums">{{ phaseLabel }}</span>
+          </p>
+        </div>
       </div>
-      <div class="prefs__actions">
-        <button class="btn btn--ghost" @click="startBreak">Break now</button>
-        <button class="btn btn--ghost" @click="togglePause">{{ state.paused ? 'Resume' : 'Pause' }}</button>
+      <div class="flex items-center gap-2" v-if="onboarded">
+        <Button variant="ghost" size="sm" @click="toggleEngine">
+          <component :is="engineRunning ? Pause : Play" class="size-3.5" />
+          {{ engineRunning ? t('actions.pause') : t('actions.resume') }}
+        </Button>
+        <Button variant="secondary" size="sm" @click="startBreak">
+          <Clock class="size-3.5" />
+          {{ t('actions.breakNow') }}
+        </Button>
       </div>
     </header>
 
-    <section class="card">
-      <h2 class="card__title">Timing</h2>
-      <div class="grid">
-        <label class="field">
-          <span>Focus duration <em>minutes</em></span>
-          <input type="number" min="1" max="180" v-model.number="s.focusDurationMin" @input="touch" />
-        </label>
-        <label class="field">
-          <span>Short break <em>seconds</em></span>
-          <input type="number" min="5" max="600" v-model.number="s.shortBreakDurationSec" @input="touch" />
-        </label>
-        <label class="field">
-          <span>Long break <em>minutes</em></span>
-          <input type="number" min="1" max="60" v-model.number="s.longBreakDurationMin" @input="touch" />
-        </label>
-        <label class="field">
-          <span>Long break every <em>breaks</em></span>
-          <input type="number" min="1" max="20" v-model.number="s.longBreakInterval" @input="touch" />
-        </label>
-        <label class="field">
-          <span>Pre-break warning <em>seconds</em></span>
-          <input type="number" min="0" max="120" v-model.number="s.preBreakWarningSec" @input="touch" />
-        </label>
-        <label class="field">
-          <span>Idle pause after <em>minutes</em></span>
-          <input type="number" min="1" max="60" v-model.number="s.idleThresholdMin" @input="touch" />
-        </label>
+    <!-- Onboarding -->
+    <section v-if="!onboarded" class="px-7 pt-2 pb-6 flex-1 flex flex-col">
+      <Card class="border-primary/20 bg-primary/[0.04]">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2 text-base">
+            <Languages class="size-4 text-primary" />
+            {{ t('onboarding.welcome') }}
+          </CardTitle>
+          <CardDescription class="leading-relaxed">
+            {{ t('onboarding.intro') }}<br />
+            <span class="text-muted-foreground/70">{{ t('onboarding.intro2') }}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-5">
+          <!-- language -->
+          <div class="space-y-1.5">
+            <Label>{{ t('onboarding.language') }}</Label>
+            <Select :model-value="locale" @update:model-value="changeLanguage">
+              <SelectTrigger class="w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh-CN">简体中文</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator />
+
+          <!-- quick defaults preview -->
+          <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-muted-foreground">{{ t('timing.focusDuration') }}</span>
+              <span class="font-medium tabular-nums">{{ s.focusDurationMin }} {{ t('timing.minutes') }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-muted-foreground">{{ t('timing.shortBreak') }}</span>
+              <span class="font-medium tabular-nums">{{ s.shortBreakDurationSec }} {{ t('timing.seconds') }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-muted-foreground">{{ t('timing.longBreak') }}</span>
+              <span class="font-medium tabular-nums">{{ s.longBreakDurationMin }} {{ t('timing.minutes') }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-muted-foreground">{{ t('timing.longBreakEvery') }}</span>
+              <span class="font-medium tabular-nums">{{ s.longBreakInterval }} {{ t('timing.breaks') }}</span>
+            </div>
+          </div>
+
+          <p class="text-xs text-muted-foreground/70">
+            {{ t('about.ruleDesc') }}
+          </p>
+        </CardContent>
+      </Card>
+
+      <div class="mt-auto pt-6 flex justify-end">
+        <Button size="lg" @click="completeOnboarding" class="min-w-[140px]">
+          <Play class="size-4" />
+          {{ t('onboarding.startButton') }}
+        </Button>
       </div>
     </section>
 
-    <section class="card">
-      <h2 class="card__title">Options</h2>
-      <label class="toggle">
-        <input type="checkbox" v-model="s.enableLongBreaks" @change="touch" />
-        <span>Enable occasional long breaks</span>
-      </label>
-      <label class="toggle">
-        <input type="checkbox" v-model="s.soundEnabled" @change="touch" />
-        <span>Play a chime when a break ends</span>
-      </label>
+    <!-- Regular settings -->
+    <section v-else class="px-7 pb-4 flex-1 min-h-0">
+      <Tabs default-value="timing" class="flex h-full flex-col">
+        <TabsList class="self-start">
+          <TabsTrigger value="timing"><Clock class="size-3.5 mr-1" />{{ t('nav.timing') }}</TabsTrigger>
+          <TabsTrigger value="options"><Check class="size-3.5 mr-1" />{{ t('nav.options') }}</TabsTrigger>
+          <TabsTrigger value="shortcuts">{{ t('nav.shortcuts') }}</TabsTrigger>
+          <TabsTrigger value="about">{{ t('nav.about') }}</TabsTrigger>
+        </TabsList>
+
+        <!-- Timing -->
+        <TabsContent value="timing" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>{{ t('timing.title') }}</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-7">
+              <!-- focus -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.focusDuration') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.focusDurationMin }} {{ t('timing.minutes') }}</span>
+                </div>
+                <Slider :model-value="num(s.focusDurationMin ? [s.focusDurationMin] : undefined, 20)" :min="5" :max="60" :step="1" @update:model-value="(v:any) => setNum('focusDurationMin', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.focusDesc') }}</p>
+              </div>
+              <Separator />
+              <!-- short break -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.shortBreak') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.shortBreakDurationSec }} {{ t('timing.seconds') }}</span>
+                </div>
+                <Slider :model-value="num(s.shortBreakDurationSec ? [s.shortBreakDurationSec] : undefined, 20)" :min="5" :max="120" :step="5" @update:model-value="(v:any) => setNum('shortBreakDurationSec', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.shortDesc') }}</p>
+              </div>
+              <Separator />
+              <!-- long break -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.longBreak') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.longBreakDurationMin }} {{ t('timing.minutes') }}</span>
+                </div>
+                <Slider :model-value="num(s.longBreakDurationMin ? [s.longBreakDurationMin] : undefined, 5)" :min="1" :max="20" :step="1" @update:model-value="(v:any) => setNum('longBreakDurationMin', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.longDesc') }}</p>
+              </div>
+              <Separator />
+              <!-- long break interval -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.longBreakEvery') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.longBreakInterval }} {{ t('timing.breaks') }}</span>
+                </div>
+                <Slider :model-value="num(s.longBreakInterval ? [s.longBreakInterval] : undefined, 4)" :min="1" :max="10" :step="1" @update:model-value="(v:any) => setNum('longBreakInterval', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.everyDesc') }}</p>
+              </div>
+              <Separator />
+              <!-- pre break warning -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.preBreakWarning') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.preBreakWarningSec }} {{ t('timing.seconds') }}</span>
+                </div>
+                <Slider :model-value="num(s.preBreakWarningSec !== undefined ? [s.preBreakWarningSec] : undefined, 10)" :min="0" :max="60" :step="5" @update:model-value="(v:any) => setNum('preBreakWarningSec', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.preDesc') }}</p>
+              </div>
+              <Separator />
+              <!-- idle -->
+              <div class="space-y-2">
+                <div class="flex items-baseline justify-between">
+                  <Label>{{ t('timing.idlePause') }}</Label>
+                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.idleThresholdMin }} {{ t('timing.minutes') }}</span>
+                </div>
+                <Slider :model-value="num(s.idleThresholdMin ? [s.idleThresholdMin] : undefined, 5)" :min="1" :max="30" :step="1" @update:model-value="(v:any) => setNum('idleThresholdMin', v)" />
+                <p class="text-xs text-muted-foreground">{{ t('timing.idleDesc') }}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <!-- Options -->
+        <TabsContent value="options" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+          <Card>
+            <CardHeader><CardTitle>{{ t('options.title') }}</CardTitle></CardHeader>
+            <CardContent class="space-y-1">
+              <div class="flex items-start justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label>{{ t('options.longBreaks') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ t('options.longBreaksDesc') }}</p>
+                </div>
+                <Switch :model-value="s.enableLongBreaks" @update:model-value="(v:any) => { s.enableLongBreaks = v; touch() }" />
+              </div>
+              <Separator />
+              <div class="flex items-start justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label class="flex items-center gap-1.5"><Bell class="size-3.5" />{{ t('options.sound') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ t('options.soundDesc') }}</p>
+                </div>
+                <Switch :model-value="s.soundEnabled" @update:model-value="(v:any) => { s.soundEnabled = v; touch() }" />
+              </div>
+              <Separator />
+              <div class="flex items-start justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label>{{ t('options.autoStart') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ t('options.autoStartDesc') }}</p>
+                </div>
+                <Switch :model-value="s.autoStart" @update:model-value="(v:any) => { s.autoStart = v; touch() }" />
+              </div>
+              <Separator />
+              <!-- language -->
+              <div class="flex items-center justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ locale === 'zh-CN' ? '简体中文' : 'English' }}</p>
+                </div>
+                <Select :model-value="locale" @update:model-value="changeLanguage">
+                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zh-CN">简体中文</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <!-- Shortcuts -->
+        <TabsContent value="shortcuts" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+          <Card>
+            <CardHeader><CardTitle>{{ t('shortcuts.title') }}</CardTitle></CardHeader>
+            <CardContent class="space-y-4">
+              <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div class="space-y-1.5">
+                  <Label>{{ t('shortcuts.startBreak') }}</Label>
+                  <Input :model-value="s.shortcutStartBreak" @update:model-value="(v:any) => { s.shortcutStartBreak = v; touch() }" placeholder="Cmd+Shift+B" />
+                </div>
+                <div class="space-y-1.5">
+                  <Label>{{ t('shortcuts.skipBreak') }}</Label>
+                  <Input :model-value="s.shortcutSkipBreak" @update:model-value="(v:any) => { s.shortcutSkipBreak = v; touch() }" placeholder="Cmd+Shift+S" />
+                </div>
+                <div class="space-y-1.5">
+                  <Label>{{ t('shortcuts.postponeBreak') }}</Label>
+                  <Input :model-value="s.shortcutPostponeBreak" @update:model-value="(v:any) => { s.shortcutPostponeBreak = v; touch() }" placeholder="Cmd+Shift+P" />
+                </div>
+                <div class="space-y-1.5">
+                  <Label>{{ t('shortcuts.preferences') }}</Label>
+                  <Input :model-value="s.shortcutPreferences" @update:model-value="(v:any) => { s.shortcutPreferences = v; touch() }" placeholder="Cmd+Shift+," />
+                </div>
+              </div>
+              <p class="text-xs text-muted-foreground">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <!-- About -->
+        <TabsContent value="about" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+          <Card>
+            <CardHeader>
+              <CardTitle class="flex items-center gap-2"><Eye class="size-4 text-primary" />{{ t('app.name') }}</CardTitle>
+              <CardDescription>{{ t('about.version') }} 0.1.0</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <p class="text-sm text-muted-foreground leading-relaxed">{{ t('about.description') }}</p>
+              <Separator />
+              <div class="space-y-1">
+                <Label class="text-foreground">{{ t('about.rule') }}</Label>
+                <p class="text-sm text-muted-foreground">{{ t('about.ruleDesc') }}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </section>
 
-    <section class="card">
-      <h2 class="card__title">Shortcuts</h2>
-      <div class="grid">
-        <label class="field">
-          <span>Start break now</span>
-          <input type="text" v-model="s.shortcutStartBreak" @input="touch" placeholder="Cmd+Shift+B" />
-        </label>
-        <label class="field">
-          <span>Skip break</span>
-          <input type="text" v-model="s.shortcutSkipBreak" @input="touch" placeholder="Cmd+Shift+S" />
-        </label>
-        <label class="field">
-          <span>Postpone break</span>
-          <input type="text" v-model="s.shortcutPostponeBreak" @input="touch" placeholder="Cmd+Shift+P" />
-        </label>
-        <label class="field">
-          <span>Show preferences</span>
-          <input type="text" v-model="s.shortcutPreferences" @input="touch" placeholder="Cmd+Shift+," />
-        </label>
-      </div>
-      <p class="card__hint">Accelerators use Wails syntax, e.g. <code>Cmd+Shift+B</code>.</p>
-    </section>
-
-    <footer class="prefs__footer">
-      <span class="prefs__saved" :class="{ 'is-on': saved }">Saved</span>
-      <div>
-        <button class="btn btn--ghost" @click="skipBreak">Skip</button>
-        <button class="btn btn--ghost" @click="postponeBreak">Postpone</button>
-        <button class="btn btn--ghost" @click="reset">Reset cycle</button>
-        <button class="btn btn--primary" :disabled="!dirty" @click="save">Save</button>
+    <!-- Footer (only regular settings) -->
+    <footer v-if="onboarded" class="flex items-center justify-between gap-2 px-7 py-4 border-t border-border/60">
+      <span class="text-xs font-medium text-emerald-400 transition-opacity" :class="saved ? 'opacity-100' : 'opacity-0'">
+        <Check class="inline size-3 mr-1" />{{ t('actions.saved') }}
+      </span>
+      <div class="flex items-center gap-2">
+        <Button variant="ghost" size="sm" @click="skipBreak"><SkipForward class="size-3.5" />{{ t('actions.skip') }}</Button>
+        <Button variant="ghost" size="sm" @click="postponeBreak">{{ t('actions.postpone') }}</Button>
+        <Button variant="ghost" size="sm" @click="reset"><RotateCcw class="size-3.5" />{{ t('actions.reset') }}</Button>
+        <Button size="sm" :disabled="!dirty" @click="save">{{ t('actions.save') }}</Button>
       </div>
     </footer>
   </div>
 </template>
 
 <style scoped>
-.prefs {
+.prefs-root {
+  /* Opaque dark surface over the translucent window so text is always readable. */
   min-height: 100vh;
-  padding: 40px 36px 28px;
-  box-sizing: border-box;
-  color: #e9edf5;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
-}
-.prefs__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 26px;
-}
-.prefs__title {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.prefs__status {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: rgba(233, 237, 245, 0.55);
-  font-variant-numeric: tabular-nums;
-}
-.prefs__actions {
-  display: flex;
-  gap: 8px;
-}
-.card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  padding: 18px 18px 20px;
-  margin-bottom: 16px;
-}
-.card__title {
-  margin: 0 0 14px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(233, 237, 245, 0.5);
-}
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px 18px;
-}
-.field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.field span {
-  font-size: 13px;
-  color: rgba(233, 237, 245, 0.75);
-}
-.field em {
-  font-style: normal;
-  color: rgba(233, 237, 245, 0.4);
-}
-.field input {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #e9edf5;
-  padding: 9px 11px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-.field input:focus {
-  border-color: rgba(91, 157, 255, 0.7);
-}
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: rgba(233, 237, 245, 0.85);
-  padding: 6px 0;
-  cursor: pointer;
-}
-.toggle input {
-  accent-color: #5b9dff;
-}
-.card__hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: rgba(233, 237, 245, 0.4);
-}
-.card__hint code {
-  background: rgba(255, 255, 255, 0.08);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 11px;
-}
-.prefs__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-}
-.prefs__saved {
-  font-size: 13px;
-  color: #5bd98a;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.prefs__saved.is-on {
-  opacity: 1;
-}
-.btn {
-  padding: 8px 16px;
-  font-size: 13px;
-  border-radius: 9px;
-  cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  transition: background 0.15s ease, opacity 0.15s ease;
-}
-.btn--ghost {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(233, 237, 245, 0.85);
-}
-.btn--ghost:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-.btn--primary {
-  background: #5b9dff;
-  color: #06101f;
-  border-color: transparent;
-  font-weight: 600;
-  margin-left: 8px;
-}
-.btn--primary:hover {
-  background: #74abff;
-}
-.btn--primary:disabled {
-  opacity: 0.4;
-  cursor: default;
+  background: linear-gradient(180deg, oklch(0.16 0.012 264) 0%, oklch(0.13 0.01 264) 100%);
 }
 </style>

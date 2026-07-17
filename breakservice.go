@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -23,11 +24,18 @@ func NewBreakService(engine *breakengine.Engine) *BreakService {
 // ServiceName is used by Wails for logging.
 func (s *BreakService) ServiceName() string { return "BreakService" }
 
-// ServiceStartup is called by Wails once the application has started; this is
-// the earliest point at which application.Get() is valid, so the engine is
-// launched here rather than in main.
+// ServiceStartup is called by Wails once the application has started. The
+// engine only begins counting down if the user has already completed onboarding
+// (and AutoStart is on); otherwise the app waits for CompleteOnboarding().
 func (s *BreakService) ServiceStartup(_ context.Context, _ application.ServiceOptions) error {
-	s.engine.Start()
+	settings := s.engine.GetSettings()
+	if settings.Onboarded && settings.AutoStart {
+		s.engine.Start()
+	} else if !settings.Onboarded {
+		// First run: surface the setup window so the user can configure before
+		// any countdown begins.
+		showPreferences()
+	}
 	return nil
 }
 
@@ -46,9 +54,39 @@ func (s *BreakService) SaveSettings(settings config.Settings) error {
 		return err
 	}
 	s.engine.ApplySettings(settings)
-	go registerAll(settings)
+	go func() {
+		registerAll(settings)
+		if settings.Language != "" {
+			if err := setMenuLanguage(settings.Language); err != nil {
+				log.Printf("pocketmind: set menu language: %v", err)
+			}
+		}
+	}()
 	return nil
 }
+
+// CompleteOnboarding marks onboarding done and starts the engine for the first
+// focus cycle. Called once the user finishes the first-run setup screen.
+func (s *BreakService) CompleteOnboarding() error {
+	settings := s.engine.GetSettings()
+	settings.Onboarded = true
+	if err := config.Save(settings); err != nil {
+		return err
+	}
+	s.engine.ApplySettings(settings)
+	go registerAll(settings)
+	if settings.Language != "" {
+		go setMenuLanguage(settings.Language)
+	}
+	s.engine.Start()
+	return nil
+}
+
+// StartEngine starts the countdown (used after a manual stop or pause).
+func (s *BreakService) StartEngine() { s.engine.Start() }
+
+// StopEngine halts the countdown entirely.
+func (s *BreakService) StopEngine() { s.engine.Stop() }
 
 // StartBreakNow forces a break immediately, skipping the pre-break warning.
 func (s *BreakService) StartBreakNow() { s.engine.StartBreakNow() }

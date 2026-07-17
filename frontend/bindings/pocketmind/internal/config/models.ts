@@ -51,6 +51,24 @@ export interface Settings {
     "soundEnabled": boolean;
 
     /**
+     * AutoStart launches the focus timer automatically when the app starts
+     * (after onboarding). When false, the user starts it manually from the tray.
+     */
+    "autoStart": boolean;
+
+    /**
+     * Onboarded records whether the user has completed the first-run setup.
+     * Until it is true the engine does not run a countdown, so the app opens
+     * to a setup screen instead of immediately counting down.
+     */
+    "onboarded": boolean;
+
+    /**
+     * Language is the UI locale, "zh-CN" or "en" (empty = follow system).
+     */
+    "language": string;
+
+    /**
      * Global keyboard shortcuts (Wails accelerator syntax, e.g. "Cmd+Shift+B").
      */
     "shortcutStartBreak": string;

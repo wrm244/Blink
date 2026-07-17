@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
+import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import { Phase } from '../../bindings/pocketmind/internal/breakengine/models'
+import { Button } from '@/components/ui/button'
 
+const { t } = useI18n()
 const phase = ref<string>('')
 const remaining = ref(0)
 const total = ref(0)
@@ -23,36 +26,45 @@ onMounted(async () => {
 onUnmounted(() => off?.())
 
 const isLong = computed(() => phase.value === Phase.PhaseLongBreak)
-const label = computed(() => (isLong.value ? 'Long break' : 'Eye break'))
-const clock = computed(() => formatClock(remaining.value))
-const ringDash = computed(() => {
+const label = computed(() => (isLong.value ? t('break.longLabel') : t('break.shortLabel')))
+// Ring progress: fraction elapsed (grows as the break advances).
+const ringFraction = computed(() => {
   if (total.value <= 0) return 0
-  return (remaining.value / total.value) * 100
+  return 1 - remaining.value / total.value
 })
+const RADIUS = 150
+const CIRC = 2 * Math.PI * RADIUS
+const dashOffset = computed(() => CIRC * (1 - ringFraction.value))
 
-function formatClock(sec: number): string {
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
-function skip() {
-  BreakService.SkipBreak()
-}
+const m = computed(() => Math.floor(remaining.value / 60))
+const s = computed(() => remaining.value % 60)
+const clock = computed(() => `${m.value}:${String(s.value).padStart(2, '0')}`)
+
+function skip() { BreakService.SkipBreak() }
 </script>
 
 <template>
   <div class="overlay">
-    <div class="overlay__glow" aria-hidden="true" />
-    <main class="overlay__content">
-      <p class="overlay__label">{{ label }}</p>
-      <div class="overlay__clock">{{ clock }}</div>
-      <p class="overlay__hint">Look at something about 20 feet away and relax your eyes.</p>
-      <button class="overlay__skip" @click="skip">Skip break</button>
+    <div class="glow" aria-hidden="true" />
+    <main class="content">
+      <p class="label">{{ label }}</p>
+
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 340 340">
+          <circle class="ring-track" cx="170" cy="170" :r="RADIUS" />
+          <circle
+            class="ring-progress"
+            cx="170" cy="170" :r="RADIUS"
+            :stroke-dasharray="CIRC"
+            :stroke-dashoffset="dashOffset"
+          />
+        </svg>
+        <div class="clock">{{ clock }}</div>
+      </div>
+
+      <p class="hint">{{ t('break.hint') }}</p>
+      <Button variant="secondary" size="lg" class="backdrop-blur" @click="skip">{{ t('break.skip') }}</Button>
     </main>
-    <!-- Progress ring as a thin bar along the bottom. -->
-    <div class="overlay__progress" aria-hidden="true">
-      <div class="overlay__progress-bar" :style="{ width: ringDash + '%' }" />
-    </div>
   </div>
 </template>
 
@@ -63,74 +75,73 @@ function skip() {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Semi-opaque dim over the translucent (blurred) window backdrop. */
   background: rgba(8, 10, 20, 0.55);
   color: #f4f6fb;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif;
   user-select: none;
 }
-.overlay__glow {
+.glow {
   position: absolute;
-  width: 60vmin;
-  height: 60vmin;
+  width: 70vmin;
+  height: 70vmin;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(86, 156, 214, 0.28), transparent 70%);
-  filter: blur(40px);
+  background: radial-gradient(circle, rgba(91, 157, 255, 0.22), transparent 70%);
+  filter: blur(50px);
 }
-.overlay__content {
+.content {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
   text-align: center;
 }
-.overlay__label {
+.label {
   margin: 0;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  font-size: 14px;
-  color: rgba(244, 246, 251, 0.62);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(244, 246, 251, 0.6);
 }
-.overlay__clock {
-  font-size: clamp(96px, 22vmin, 240px);
-  font-weight: 260;
+.ring-wrap {
+  position: relative;
+  width: 340px;
+  height: 340px;
+  display: grid;
+  place-items: center;
+}
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 6;
+}
+.ring-progress {
+  fill: none;
+  stroke: url(#grad);
+  stroke: #5b9dff;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+  filter: drop-shadow(0 0 8px rgba(91, 157, 255, 0.5));
+}
+.clock {
+  font-size: clamp(64px, 14vmin, 112px);
+  font-weight: 250;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
 }
-.overlay__hint {
+.hint {
   margin: 0;
-  max-width: 32ch;
-  font-size: 16px;
-  color: rgba(244, 246, 251, 0.5);
-}
-.overlay__skip {
-  margin-top: 10px;
-  padding: 10px 22px;
-  font-size: 14px;
-  color: rgba(244, 246, 251, 0.8);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 10px;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
-  transition: background 0.15s ease;
-}
-.overlay__skip:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-.overlay__progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.overlay__progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #5b9dff, #8b7dff);
-  transition: width 1s linear;
+  max-width: 34ch;
+  font-size: 15px;
+  color: rgba(244, 246, 251, 0.48);
 }
 </style>

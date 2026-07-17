@@ -88,6 +88,27 @@ func (e *Engine) Start() {
 	go e.windowLoop()
 }
 
+// IsStarted reports whether the engine's background ticker is running.
+func (e *Engine) IsStarted() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.started
+}
+
+// Stop halts the background goroutines. The engine can be restarted with Start.
+func (e *Engine) Stop() {
+	e.mu.Lock()
+	if !e.started {
+		e.mu.Unlock()
+		return
+	}
+	e.started = false
+	close(e.stopCh)
+	e.hideNotice()
+	e.hideOverlays()
+	e.mu.Unlock()
+}
+
 // app_ returns the cached Wails app, set once at Start time.
 func (e *Engine) app_() *application.App {
 	return e.app

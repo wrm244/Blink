@@ -31,6 +31,15 @@ type Settings struct {
 	EnableLongBreaks bool `json:"enableLongBreaks"`
 	// SoundEnabled toggles the break-end chime and pre-break tick.
 	SoundEnabled bool `json:"soundEnabled"`
+	// AutoStart launches the focus timer automatically when the app starts
+	// (after onboarding). When false, the user starts it manually from the tray.
+	AutoStart bool `json:"autoStart"`
+	// Onboarded records whether the user has completed the first-run setup.
+	// Until it is true the engine does not run a countdown, so the app opens
+	// to a setup screen instead of immediately counting down.
+	Onboarded bool `json:"onboarded"`
+	// Language is the UI locale, "zh-CN" or "en" (empty = follow system).
+	Language string `json:"language"`
 
 	// Global keyboard shortcuts (Wails accelerator syntax, e.g. "Cmd+Shift+B").
 	ShortcutStartBreak    string `json:"shortcutStartBreak"`
@@ -52,6 +61,9 @@ func Default() Settings {
 		IdleThresholdMin:      5,
 		EnableLongBreaks:      true,
 		SoundEnabled:          true,
+		AutoStart:             true,
+		Onboarded:             false,
+		Language:              "",
 		ShortcutStartBreak:    "Cmd+Shift+B",
 		ShortcutSkipBreak:     "Cmd+Shift+S",
 		ShortcutPostponeBreak: "Cmd+Shift+P",
