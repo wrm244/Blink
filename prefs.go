@@ -30,19 +30,27 @@ func preferencesOptions() application.WebviewWindowOptions {
 	}
 }
 
-// showPreferences reveals the settings window, creating it on first use. The
-// window is created on demand (rather than pre-created hidden at startup) so
-// that Wails' macOS backend shows it immediately - a Hidden:true window never
-// receives the key event that its own lazy-show handler waits for, which would
-// leave it invisible.
+// showPreferences reveals the settings window, creating it on first use.
+//
+// Thread-safety: this may be called from the main thread (the ServiceStartup
+// hook on first run) or from a goroutine (tray menu / global shortcut). The
+// fresh-creation path deliberately does NOT call Show()/Focus(): NewWithOptions
+// already shows the window (Hidden is unset), and Show() does a re-entrant
+// InvokeSync that deadlocks the main thread (InvokeSync posts to the main
+// queue via dispatch_async then blocks on a WaitGroup; if the caller IS the
+// main thread, the posted block can never run). The existing-window branch
+// (Show/Focus) is only reached from goroutine callers, so it is safe.
 func showPreferences() {
 	if app == nil {
 		return
 	}
-	w, ok := app.Window.GetByName(prefsWindowName)
-	if !ok || w == nil {
-		w = app.Window.NewWithOptions(preferencesOptions())
+	if w, ok := app.Window.GetByName(prefsWindowName); ok && w != nil {
+		w.Show()
+		w.Focus()
+		return
 	}
-	w.Show()
-	w.Focus()
+	// Fresh creation: NewWithOptions shows the window itself (Hidden is false),
+	// whether it runs inline (app already running) or deferred (app still
+	// starting). Do not call Show()/Focus() here.
+	app.Window.NewWithOptions(preferencesOptions())
 }
