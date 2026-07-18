@@ -22,8 +22,8 @@ const (
 	soundBreakEnd = "Glass"
 	soundPreBreak = "Tink"
 
-	tickInterval       = 1 * time.Second
-	idleCheckInterval  = 5 * time.Second
+	tickInterval      = 1 * time.Second
+	idleCheckInterval = 5 * time.Second
 	// sleepGap: if two ticks are farther apart than this the machine likely
 	// slept; rather than fire a stale break we reset the focus period.
 	sleepGap = 5 * time.Second
@@ -52,7 +52,7 @@ type Engine struct {
 	// lastTick is used to detect system sleep (a suddenly large gap).
 	lastTick time.Time
 
-	app     *application.App
+	app      *application.App
 	overlays []application.Window
 	notice   application.Window
 
@@ -127,7 +127,7 @@ func (e *Engine) state() State {
 	total := e.total
 	remaining := total
 	if !e.phaseEnd.IsZero() {
-		remaining = e.phaseEnd.Sub(time.Now())
+		remaining = time.Until(e.phaseEnd)
 	}
 	if e.paused {
 		remaining = e.pausedRemaining
@@ -150,10 +150,18 @@ func (e *Engine) emit() {
 
 // ---- durations ----
 
-func (e *Engine) focusDur() time.Duration { return time.Duration(e.settings.FocusDurationMin) * time.Minute }
-func (e *Engine) shortDur() time.Duration  { return time.Duration(e.settings.ShortBreakDurationSec) * time.Second }
-func (e *Engine) longDur() time.Duration  { return time.Duration(e.settings.LongBreakDurationMin) * time.Minute }
-func (e *Engine) preDur() time.Duration   { return time.Duration(e.settings.PreBreakWarningSec) * time.Second }
+func (e *Engine) focusDur() time.Duration {
+	return time.Duration(e.settings.FocusDurationMin) * time.Minute
+}
+func (e *Engine) shortDur() time.Duration {
+	return time.Duration(e.settings.ShortBreakDurationSec) * time.Second
+}
+func (e *Engine) longDur() time.Duration {
+	return time.Duration(e.settings.LongBreakDurationMin) * time.Minute
+}
+func (e *Engine) preDur() time.Duration {
+	return time.Duration(e.settings.PreBreakWarningSec) * time.Second
+}
 
 func (e *Engine) shouldLong() bool {
 	return e.settings.EnableLongBreaks && e.breaksDone >= e.settings.LongBreakInterval
@@ -169,7 +177,7 @@ func (e *Engine) setPhase(p Phase, dur time.Duration) {
 	e.pausedRemaining = 0
 }
 
-func (e *Engine) startFocus(now time.Time) {
+func (e *Engine) startFocus(_ time.Time) {
 	e.setPhase(PhaseFocusing, e.focusDur())
 	e.hideNotice()
 	e.hideOverlays()
@@ -201,9 +209,10 @@ func (e *Engine) startBreak() {
 }
 
 func (e *Engine) endBreak() {
-	if e.phase == PhaseLongBreak {
+	switch e.phase {
+	case PhaseLongBreak:
 		e.breaksDone = 0
-	} else if e.phase == PhaseShortBreak {
+	case PhaseShortBreak:
 		e.breaksDone++
 	}
 	if e.settings.SoundEnabled {
@@ -397,7 +406,7 @@ func (e *Engine) Pause() {
 		// Already effectively paused by inactivity.
 		return
 	}
-	remaining := e.phaseEnd.Sub(time.Now())
+	remaining := time.Until(e.phaseEnd)
 	if remaining < 0 {
 		remaining = 0
 	}

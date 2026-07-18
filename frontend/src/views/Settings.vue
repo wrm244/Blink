@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { Events } from '@wailsio/runtime'
-import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/pocketmind'
-import type { Settings } from '../../bindings/pocketmind/internal/config/models'
-import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
-import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor, Sparkles, Keyboard, Info, Timer, Coffee, Settings as Settings2, RotateCcw, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import GButton from '@/components/GButton.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
-import GSlider from '@/components/GSlider.vue'
+import GTimeField from '@/components/GTimeField.vue'
 import GToggle from '@/components/GToggle.vue'
 import { setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
+import { Events } from '@wailsio/runtime'
+import { Bell, Check, Clock, Coffee, Eye, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Settings as Settings2, Sparkles, Sun, Timer } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BreakService } from '../../bindings/pocketmind'
+import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
+import type { Settings } from '../../bindings/pocketmind/internal/config/models'
 
 const { t, locale } = useI18n()
 
@@ -23,8 +23,12 @@ const tab = ref('timing')
 const collapsed = ref(false)
 let off: (() => void) | undefined
 
+// Snapshot of last-saved settings, so Discard can restore them.
+let savedSnapshot: Settings | null = null
+
 onMounted(async () => {
   Object.assign(s, await BreakService.GetSettings())
+  savedSnapshot = { ...s }
   applyTheme((s.theme as Theme) || 'system')
   if (s.language === 'zh-CN' || s.language === 'en') {
     setLocale(s.language)
@@ -36,8 +40,11 @@ onMounted(async () => {
 onUnmounted(() => off?.())
 
 const onboarded = computed(() => s.onboarded === true)
-const isPaused = computed(() => state.value.paused || state.value.phase === 'idle')
+
+// A cycle is "paused" if either the user paused it or the engine went idle.
+const isPaused = computed(() => !!state.value.paused || state.value.phase === 'idle')
 const isBreak = computed(() => state.value.phase === 'shortbreak' || state.value.phase === 'longbreak')
+const cycleRunning = computed(() => !!state.value.phase && state.value.phase !== 'idle' && !state.value.paused)
 
 function touch() { dirty.value = true; saved.value = false }
 function changeLanguage(v: string) { setLocale(v as Locale); locale.value = v; s.language = v; touch() }
@@ -45,12 +52,26 @@ function changeTheme(v: string) { s.theme = v; applyTheme(v as Theme); touch() }
 
 async function save() {
   await BreakService.SaveSettings({ ...s })
+  savedSnapshot = { ...s }
   dirty.value = false
   saved.value = true
+}
+function discard() {
+  if (savedSnapshot) {
+    Object.assign(s, savedSnapshot)
+    applyTheme((s.theme as Theme) || 'system')
+    if (s.language === 'zh-CN' || s.language === 'en') {
+      setLocale(s.language)
+      locale.value = s.language
+    }
+  }
+  dirty.value = false
+  saved.value = false
 }
 async function completeOnboarding() {
   s.onboarded = true
   await BreakService.SaveSettings({ ...s })
+  savedSnapshot = { ...s }
   await BreakService.CompleteOnboarding()
   dirty.value = false
 }
@@ -68,27 +89,31 @@ const progress = computed(() => {
 })
 
 const heroTitle = computed(() => {
+  // User-paused or idle: countdown frozen.
+  if (isPaused.value) return t('hero.paused')
   switch (state.value.phase) {
     case 'focusing': return t('hero.focusing')
     case 'shortbreak': case 'longbreak': return t('hero.resting')
-    case 'paused': case 'idle': return t('hero.paused')
     case 'prebreak': return t('hero.resting')
     default: return t('hero.startFocus')
   }
 })
 const heroSub = computed(() => {
+  if (isPaused.value) {
+    if (state.value.phase === 'idle') return t('status.idle')
+    return t('status.paused')
+  }
   switch (state.value.phase) {
     case 'focusing': case 'prebreak': return t('status.breakIn', { sec: state.value.remainingSec })
     case 'shortbreak': case 'longbreak': return t('status.remaining') + ' ' + fmt(state.value.remainingSec)
-    case 'paused': case 'idle': return t('status.paused')
     default: return t('onboarding.intro2')
   }
 })
 const phaseColor = computed(() => {
+  if (isPaused.value) return '#9aa2b1'
   switch (state.value.phase) {
     case 'shortbreak': case 'longbreak': return '#5fd8a4'
     case 'prebreak': return '#ffb454'
-    case 'paused': case 'idle': return '#9aa2b1'
     default: return '#6b8dff'
   }
 })
@@ -108,7 +133,20 @@ const navGeneral = computed(() => [
 
 const shortDone = computed(() => state.value.shortBreakCount ?? 0)
 const breaksUntilLong = computed(() => state.value.breaksUntilLong ?? 0)
-const cycleRunning = computed(() => !!state.value.phase && state.value.phase !== 'idle')
+
+// Drawer status line: reflects focus / break / paused / idle accurately.
+const cycleStatusText = computed(() => {
+  if (isPaused.value) {
+    if (state.value.phase === 'idle') return t('status.idle')
+    return t('hero.paused')
+  }
+  switch (state.value.phase) {
+    case 'focusing': return t('hero.focusing')
+    case 'shortbreak': case 'longbreak': return t('hero.resting')
+    case 'prebreak': return t('hero.resting')
+    default: return t('stats.notRunning')
+  }
+})
 
 const themeOptions = [
   { value: 'system', label: '', icon: Monitor },
@@ -121,14 +159,149 @@ const langOptions = [
 ]
 function themeLabel(v: string) { return t('options.theme' + (v === 'system' ? 'System' : v === 'light' ? 'Light' : 'Dark')) }
 
-const timingRows = computed(() => [
-  { key: 'focusDurationMin' as const, label: t('timing.focusDuration'), desc: t('timing.focusDesc'), value: s.focusDurationMin, unit: t('timing.minutes'), min: 5, max: 60, step: 1 },
-  { key: 'shortBreakDurationSec' as const, label: t('timing.shortBreak'), desc: t('timing.shortDesc'), value: s.shortBreakDurationSec, unit: t('timing.seconds'), min: 5, max: 120, step: 5 },
-  { key: 'longBreakDurationMin' as const, label: t('timing.longBreak'), desc: t('timing.longDesc'), value: s.longBreakDurationMin, unit: t('timing.minutes'), min: 1, max: 20, step: 1 },
-  { key: 'longBreakInterval' as const, label: t('timing.longBreakEvery'), desc: t('timing.everyDesc'), value: s.longBreakInterval, unit: t('timing.breaks'), min: 1, max: 10, step: 1 },
-  { key: 'preBreakWarningSec' as const, label: t('timing.preBreakWarning'), desc: t('timing.preDesc'), value: s.preBreakWarningSec ?? 0, unit: t('timing.seconds'), min: 0, max: 60, step: 5 },
-  { key: 'idleThresholdMin' as const, label: t('timing.idlePause'), desc: t('timing.idleDesc'), value: s.idleThresholdMin, unit: t('timing.minutes'), min: 1, max: 30, step: 1 },
+// ---- Timing tab ----
+// Time fields with steppers + preset chips. Each field is a compact GTimeField
+// laid out in a 2-column grid for scannability and quick editing.
+
+interface TimingField {
+  key: keyof Settings
+  label: string
+  desc: string
+  unit?: string
+  min: number
+  max: number
+  step: number
+  presets: number[]
+  // For seconds-based fields, render chips as "1m", "5m" etc., and the value
+  // display as "5 分" so users don't have to do mental arithmetic on "300 秒".
+  formatChip?: (v: number) => string
+  formatValue?: (v: number) => string
+}
+
+const focusPresets = [15, 20, 25, 30, 45, 50]
+const shortBreakPresets = [20, 60, 180, 300, 600]
+const longBreakPresets = [5, 10, 15, 20]
+const intervalPresets = [2, 3, 4, 5]
+const preWarnPresets = [0, 10, 15, 30, 60]
+const idlePresets = [1, 3, 5, 10, 15]
+
+// Friendly chip/value formatters for seconds-based fields.
+// The value display returns a full label (e.g. "20 秒", "5 分") and we drop the
+// separate unit prop, so users never have to read "300 秒".
+function fmtSecs(v: number): string {
+  if (v <= 0) return '0'
+  if (v < 60) return `${v} 秒`
+  const m = Math.floor(v / 60)
+  const s = v % 60
+  return s === 0 ? `${m} 分` : `${m} 分 ${s} 秒`
+}
+function fmtSecsChip(v: number): string {
+  if (v < 60) return `${v}s`
+  const m = Math.floor(v / 60)
+  const s = v % 60
+  return s === 0 ? `${m}m` : `${m}m${s}s`
+}
+
+const timingFields = computed<TimingField[]>(() => [
+  {
+    key: 'focusDurationMin',
+    label: t('timing.focusDuration'),
+    desc: t('timing.focusDesc'),
+    unit: t('timing.minutes'),
+    min: 5, max: 60, step: 1,
+    presets: focusPresets,
+  },
+  {
+    key: 'shortBreakDurationSec',
+    label: t('timing.shortBreak'),
+    desc: t('timing.shortDesc'),
+    min: 5, max: 600, step: 5,
+    presets: shortBreakPresets,
+    formatChip: fmtSecsChip,
+    formatValue: fmtSecs,
+  },
+  {
+    key: 'longBreakDurationMin',
+    label: t('timing.longBreak'),
+    desc: t('timing.longDesc'),
+    unit: t('timing.minutes'),
+    min: 1, max: 20, step: 1,
+    presets: longBreakPresets,
+  },
+  {
+    key: 'longBreakInterval',
+    label: t('timing.longBreakEvery'),
+    desc: t('timing.everyDesc'),
+    unit: t('timing.breaks'),
+    min: 1, max: 10, step: 1,
+    presets: intervalPresets,
+  },
+  {
+    key: 'preBreakWarningSec',
+    label: t('timing.preBreakWarning'),
+    desc: t('timing.preDesc'),
+    min: 0, max: 60, step: 5,
+    presets: preWarnPresets,
+    formatChip: fmtSecsChip,
+    formatValue: fmtSecs,
+  },
+  {
+    key: 'idleThresholdMin',
+    label: t('timing.idlePause'),
+    desc: t('timing.idleDesc'),
+    unit: t('timing.minutes'),
+    min: 1, max: 30, step: 1,
+    presets: idlePresets,
+  },
 ])
+
+// ---- Preset profiles ----
+// One-click applies a coherent set of timing values; selecting "Custom" just
+// labels the current combination (it's auto-selected when values diverge).
+
+interface PresetProfile {
+  id: 'eye' | 'pomo' | '52' | 'custom'
+  name: string
+  desc: string
+  values?: Partial<Settings>
+}
+const presetProfiles = computed<PresetProfile[]>(() => [
+  {
+    id: 'eye',
+    name: t('timing.presetEye'),
+    desc: t('timing.presetEyeDesc'),
+    values: { focusDurationMin: 20, shortBreakDurationSec: 20, longBreakDurationMin: 5, longBreakInterval: 4, preBreakWarningSec: 10, idleThresholdMin: 5 },
+  },
+  {
+    id: 'pomo',
+    name: t('timing.presetPomo'),
+    desc: t('timing.presetPomoDesc'),
+    values: { focusDurationMin: 25, shortBreakDurationSec: 300, longBreakDurationMin: 15, longBreakInterval: 4, preBreakWarningSec: 30, idleThresholdMin: 5 },
+  },
+  {
+    id: '52',
+    name: t('timing.preset52'),
+    desc: t('timing.preset52Desc'),
+    values: { focusDurationMin: 50, shortBreakDurationSec: 600, longBreakDurationMin: 20, longBreakInterval: 3, preBreakWarningSec: 60, idleThresholdMin: 10 },
+  },
+  { id: 'custom', name: t('timing.presetCustom'), desc: '' },
+])
+
+const activePreset = computed<PresetProfile['id']>(() => {
+  const eye = presetProfiles.value.find(p => p.id === 'eye')?.values
+  const pomo = presetProfiles.value.find(p => p.id === 'pomo')?.values
+  const p52 = presetProfiles.value.find(p => p.id === '52')?.values
+  const match = (v?: Partial<Settings>) => v && Object.entries(v).every(([k, val]) => (s as any)[k] === val)
+  if (match(eye)) return 'eye'
+  if (match(pomo)) return 'pomo'
+  if (match(p52)) return '52'
+  return 'custom'
+})
+function applyPreset(p: PresetProfile) {
+  if (!p.values) return
+  Object.entries(p.values).forEach(([k, v]) => { (s as any)[k] = v })
+  touch()
+}
 
 const shortcutRows = computed(() => [
   { key: 'shortcutStartBreak' as const, label: t('shortcuts.startBreak'), icon: Clock, value: s.shortcutStartBreak, placeholder: 'Cmd+Shift+B' },
@@ -136,6 +309,10 @@ const shortcutRows = computed(() => [
   { key: 'shortcutPostponeBreak' as const, label: t('shortcuts.postponeBreak'), icon: Clock, value: s.shortcutPostponeBreak, placeholder: 'Cmd+Shift+P' },
   { key: 'shortcutPreferences' as const, label: t('shortcuts.preferences'), icon: Settings2, value: s.shortcutPreferences, placeholder: 'Cmd+Shift+,' },
 ])
+
+// Save bar is relevant only on tabs that actually edit settings.
+const editTabs = ['timing', 'options', 'shortcuts']
+const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.value))
 </script>
 
 <template>
@@ -185,8 +362,8 @@ const shortcutRows = computed(() => [
                 </div>
               </div>
               <div class="cycle__status">
-                <span class="cycle__dot" :style="{ background: cycleRunning ? phaseColor : '#9aa2b1' }" />
-                <span>{{ cycleRunning ? t('hero.focusing') : t('stats.notRunning') }}</span>
+                <span class="cycle__dot" :class="{ 'cycle__dot--paused': isPaused }" :style="{ background: cycleRunning ? phaseColor : '#9aa2b1' }" />
+                <span>{{ cycleStatusText }}</span>
               </div>
               <button class="cycle__reset" @click="reset">
                 <RotateCcw class="size-3.5" />{{ t('actions.reset') }}
@@ -211,11 +388,6 @@ const shortcutRows = computed(() => [
                 </div>
               </div>
             </div>
-
-            <div v-if="onboarded" class="drawer__foot">
-              <span class="saved" :class="{ 'is-on': saved }"><Check class="size-3.5" />{{ t('actions.saved') }}</span>
-              <GButton variant="primary" size="md" :disabled="!dirty" @click="save">{{ t('actions.save') }}</GButton>
-            </div>
           </template>
         </GlassPanel>
       </aside>
@@ -223,7 +395,7 @@ const shortcutRows = computed(() => [
       <!-- MAIN (right) -->
       <main class="main">
         <!-- HERO (fixed header) -->
-        <GlassPanel strong class="hero" :class="{ 'hero--break': isBreak }">
+        <GlassPanel strong class="hero" :class="{ 'hero--break': isBreak, 'hero--paused': isPaused }">
           <div class="hero__top">
             <div class="hero__brand">
               <div class="hero__logo"><Eye class="size-5" /></div>
@@ -251,7 +423,7 @@ const shortcutRows = computed(() => [
                 <component :is="isPaused ? Play : Pause" class="size-3.5" />
                 {{ isPaused ? t('actions.resume') : t('actions.pause') }}
               </GButton>
-              <GButton variant="primary" size="sm" @click="startBreak">
+              <GButton v-if="!isBreak" variant="primary" size="sm" @click="startBreak">
                 <Clock class="size-3.5" />
                 {{ t('actions.breakNow') }}
               </GButton>
@@ -285,73 +457,126 @@ const shortcutRows = computed(() => [
         </GlassPanel>
 
         <!-- SCROLLABLE PANEL CONTENT -->
-        <div v-if="onboarded" class="panels">
-          <section v-show="tab === 'timing'" class="panel-stack">
-            <GlassPanel v-for="row in timingRows" :key="row.key" class="timing-row">
-              <div class="timing-row__head">
-                <div>
-                  <div class="timing-row__label">{{ row.label }}</div>
-                  <div class="timing-row__desc">{{ row.desc }}</div>
+        <div v-if="onboarded" class="panels-wrap">
+          <div class="panels">
+            <!-- TIMING -->
+            <section v-show="tab === 'timing'" class="panel-stack">
+              <!-- Preset profiles -->
+              <GlassPanel class="presets">
+                <div class="presets__head">
+                  <div class="presets__title">{{ t('timing.presets') }}</div>
                 </div>
-                <div class="timing-row__value tabular-nums">{{ row.value }}<span class="timing-row__unit">{{ row.unit }}</span></div>
-              </div>
-              <GSlider :model-value="row.value" :min="row.min" :max="row.max" :step="row.step" @update:model-value="(v: number) => setNum(row.key, v)" />
-            </GlassPanel>
-          </section>
-
-          <section v-show="tab === 'options'" class="panel-stack">
-            <GlassPanel class="opt-row">
-              <div class="opt-row__left">
-                <span class="opt-row__label"><Coffee class="size-4" />{{ t('options.longBreaks') }}</span>
-                <span class="opt-row__desc">{{ t('options.longBreaksDesc') }}</span>
-              </div>
-              <GToggle :model-value="s.enableLongBreaks" @update:model-value="(v: boolean) => { s.enableLongBreaks = v; touch() }" />
-            </GlassPanel>
-            <GlassPanel class="opt-row">
-              <div class="opt-row__left">
-                <span class="opt-row__label"><Bell class="size-4" />{{ t('options.sound') }}</span>
-                <span class="opt-row__desc">{{ t('options.soundDesc') }}</span>
-              </div>
-              <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => { s.soundEnabled = v; touch() }" />
-            </GlassPanel>
-            <GlassPanel class="opt-row">
-              <div class="opt-row__left">
-                <span class="opt-row__label"><Play class="size-4" />{{ t('options.autoStart') }}</span>
-                <span class="opt-row__desc">{{ t('options.autoStartDesc') }}</span>
-              </div>
-              <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => { s.autoStart = v; touch() }" />
-            </GlassPanel>
-          </section>
-
-          <section v-show="tab === 'shortcuts'" class="panel-stack">
-            <GlassPanel v-for="row in shortcutRows" :key="row.key" class="shortcut-row">
-              <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
-              <input
-                class="keycap"
-                :value="row.value"
-                :placeholder="row.placeholder"
-                @input="(e) => { (s as any)[row.key] = (e.target as HTMLInputElement).value; touch() }"
-              />
-            </GlassPanel>
-            <p class="hint">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
-          </section>
-
-          <section v-show="tab === 'about'" class="panel-stack">
-            <GlassPanel class="about">
-              <div class="about__head">
-                <div class="about__logo"><Eye class="size-6" /></div>
-                <div>
-                  <div class="about__name">{{ t('app.name') }}</div>
-                  <div class="about__ver">{{ t('about.version') }} 0.1.0</div>
+                <div class="presets__grid">
+                  <button
+                    v-for="p in presetProfiles"
+                    :key="p.id"
+                    class="preset"
+                    :class="{ 'preset--on': activePreset === p.id, 'preset--custom': p.id === 'custom' }"
+                    @click="applyPreset(p)"
+                  >
+                    <div class="preset__name">{{ p.name }}</div>
+                    <div v-if="p.desc" class="preset__desc">{{ p.desc }}</div>
+                    <Check v-if="activePreset === p.id" class="preset__check size-3.5" />
+                  </button>
                 </div>
+              </GlassPanel>
+
+              <!-- Timing fields grid -->
+              <GlassPanel class="timing-grid">
+                <GTimeField
+                  v-for="f in timingFields"
+                  :key="f.key"
+                  :label="f.label"
+                  :desc="f.desc"
+                  :unit="f.unit"
+                  :min="f.min"
+                  :max="f.max"
+                  :step="f.step"
+                  :presets="f.presets"
+                  :model-value="(s as any)[f.key] ?? 0"
+                  :chip-label="f.formatChip"
+                  :display-value="f.formatValue"
+                  @update:model-value="(v: number) => setNum(f.key, v)"
+                />
+              </GlassPanel>
+            </section>
+
+            <!-- OPTIONS -->
+            <section v-show="tab === 'options'" class="panel-stack">
+              <GlassPanel class="opt-row">
+                <div class="opt-row__left">
+                  <span class="opt-row__label"><Coffee class="size-4" />{{ t('options.longBreaks') }}</span>
+                  <span class="opt-row__desc">{{ t('options.longBreaksDesc') }}</span>
+                </div>
+                <GToggle :model-value="s.enableLongBreaks" @update:model-value="(v: boolean) => { s.enableLongBreaks = v; touch() }" />
+              </GlassPanel>
+              <GlassPanel class="opt-row">
+                <div class="opt-row__left">
+                  <span class="opt-row__label"><Bell class="size-4" />{{ t('options.sound') }}</span>
+                  <span class="opt-row__desc">{{ t('options.soundDesc') }}</span>
+                </div>
+                <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => { s.soundEnabled = v; touch() }" />
+              </GlassPanel>
+              <GlassPanel class="opt-row">
+                <div class="opt-row__left">
+                  <span class="opt-row__label"><Play class="size-4" />{{ t('options.autoStart') }}</span>
+                  <span class="opt-row__desc">{{ t('options.autoStartDesc') }}</span>
+                </div>
+                <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => { s.autoStart = v; touch() }" />
+              </GlassPanel>
+            </section>
+
+            <!-- SHORTCUTS -->
+            <section v-show="tab === 'shortcuts'" class="panel-stack">
+              <GlassPanel v-for="row in shortcutRows" :key="row.key" class="shortcut-row">
+                <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
+                <input
+                  class="keycap"
+                  :value="row.value"
+                  :placeholder="row.placeholder"
+                  @input="(e) => { (s as any)[row.key] = (e.target as HTMLInputElement).value; touch() }"
+                />
+              </GlassPanel>
+              <p class="hint">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
+            </section>
+
+            <!-- ABOUT -->
+            <section v-show="tab === 'about'" class="panel-stack">
+              <GlassPanel class="about">
+                <div class="about__head">
+                  <div class="about__logo"><Eye class="size-6" /></div>
+                  <div>
+                    <div class="about__name">{{ t('app.name') }}</div>
+                    <div class="about__ver">{{ t('about.version') }} 0.1.0</div>
+                  </div>
+                </div>
+                <p class="about__desc">{{ t('about.description') }}</p>
+                <div class="about__rule">
+                  <div class="about__rule-title"><Sparkles class="size-4" />{{ t('about.rule') }}</div>
+                  <p class="about__rule-desc">{{ t('about.ruleDesc') }}</p>
+                </div>
+              </GlassPanel>
+            </section>
+          </div>
+
+          <!-- Sticky save bar: lives in the main column, NOT the drawer.
+               Hidden when there's nothing to edit (e.g. About tab). -->
+          <transition name="pm-slide-up">
+            <div v-if="showSaveBar" class="savebar" :class="{ 'savebar--dirty': dirty }">
+              <div class="savebar__left">
+                <span v-if="dirty" class="savebar__dot" />
+                <span v-else-if="saved" class="savebar__saved"><Check class="size-3.5" />{{ t('actions.saved') }}</span>
+                <span v-else class="savebar__idle">{{ t('actions.saved') }}</span>
               </div>
-              <p class="about__desc">{{ t('about.description') }}</p>
-              <div class="about__rule">
-                <div class="about__rule-title"><Sparkles class="size-4" />{{ t('about.rule') }}</div>
-                <p class="about__rule-desc">{{ t('about.ruleDesc') }}</p>
+              <div class="savebar__right">
+                <GButton v-if="dirty" variant="ghost" size="sm" @click="discard">{{ t('actions.discard') }}</GButton>
+                <GButton variant="primary" size="sm" :disabled="!dirty" @click="save">
+                  <Check class="size-3.5" />
+                  {{ t('actions.save') }}
+                </GButton>
               </div>
-            </GlassPanel>
-          </section>
+            </div>
+          </transition>
         </div>
       </main>
     </div>
@@ -492,7 +717,15 @@ const shortcutRows = computed(() => [
   color: var(--text-muted);
   padding: 2px 10px 8px;
 }
-.cycle__dot { width: 7px; height: 7px; border-radius: 50%; }
+.cycle__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.cycle__dot--paused {
+  animation: none;
+}
 .cycle__reset {
   display: inline-flex;
   align-items: center;
@@ -537,27 +770,6 @@ const shortcutRows = computed(() => [
 }
 .seg--icon { display: grid; place-items: center; padding: 5px 8px; }
 
-.drawer__foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
-}
-.saved {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #5fd8a4;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-.saved.is-on { opacity: 1; }
-
 /* ---- main (right) ---- */
 .main {
   display: flex;
@@ -569,6 +781,7 @@ const shortcutRows = computed(() => [
 
 .hero { padding: 20px 24px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
 .hero--break :deep(.hero__logo) { background: rgba(95, 216, 164, 0.16) !important; }
+.hero--paused :deep(.hero__logo) { background: rgba(154, 162, 177, 0.18) !important; color: var(--text-muted) !important; }
 .hero__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .hero__brand { display: flex; gap: 12px; align-items: center; }
 .hero__logo {
@@ -577,10 +790,11 @@ const shortcutRows = computed(() => [
   border-radius: 13px;
   background: var(--accent-soft);
   color: var(--accent);
+  transition: background 0.2s, color 0.2s;
 }
 .hero__title { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
 .hero__sub { margin: 3px 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
-.hero__dot { width: 7px; height: 7px; border-radius: 50%; }
+.hero__dot { width: 7px; height: 7px; border-radius: 50%; transition: background 0.2s, box-shadow 0.2s; }
 .hero__label { font-weight: 500; }
 .hero__clock { text-align: right; }
 .hero__time { font-size: 34px; font-weight: 250; line-height: 1; color: var(--text); }
@@ -604,28 +818,96 @@ const shortcutRows = computed(() => [
 .onboard__label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 .onboard__start { align-self: flex-end; min-width: 150px; }
 
-/* scrollable panel area: only this scrolls, window stays fixed height */
+/* panels-wrap holds the scroll area + the sticky save bar */
+.panels-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .panels {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
+  display: flex;
+  flex-direction: column;
 }
-.panel-stack { display: flex; flex-direction: column; gap: 10px; animation: pm-fade-up 0.4s ease both; }
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: pm-fade-up 0.4s ease both;
+}
 
-.timing-row { padding: 16px 20px; }
-.timing-row__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
-.timing-row__label { font-size: 14px; font-weight: 500; color: var(--text); }
-.timing-row__desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
-.timing-row__value { font-size: 24px; font-weight: 300; color: var(--accent); }
-.timing-row__unit { font-size: 12px; color: var(--text-faint); margin-left: 4px; font-weight: 400; }
+/* ---- timing tab ---- */
+.presets { padding: 16px 18px; }
+.presets__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.presets__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.presets__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.preset {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+  overflow: hidden;
+}
+.preset:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); }
+.preset--on {
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  box-shadow: 0 6px 18px -6px var(--accent-soft);
+}
+.preset__name { font-size: 13px; font-weight: 600; }
+.preset__desc { font-size: 11px; color: var(--text-faint); line-height: 1.35; }
+.preset--on .preset__desc { color: var(--on-accent); opacity: 0.85; }
+.preset__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--on-accent);
+}
 
+.timing-grid {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .timing-grid { grid-template-columns: 1fr; }
+  .presets__grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---- options ---- */
 .opt-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px 20px; }
 .opt-row__left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .opt-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
 .opt-row__desc { font-size: 12px; color: var(--text-faint); }
 
+/* ---- shortcuts ---- */
 .shortcut-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 13px 20px; }
 .shortcut-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
 .keycap {
@@ -644,6 +926,7 @@ const shortcutRows = computed(() => [
 .keycap:focus { border-color: var(--accent); }
 .hint { font-size: 12px; color: var(--text-faint); padding: 4px 6px; }
 
+/* ---- about ---- */
 .about { padding: 24px; }
 .about__head { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
 .about__logo { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 13px; background: var(--accent-soft); color: var(--accent); }
@@ -653,4 +936,53 @@ const shortcutRows = computed(() => [
 .about__rule { padding: 16px; border-radius: 12px; background: var(--accent-soft); }
 .about__rule-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--accent); margin-bottom: 6px; }
 .about__rule-desc { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+
+/* ---- sticky save bar ---- */
+.savebar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: opacity 0.2s, transform 0.25s;
+}
+.savebar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.savebar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  animation: pm-pulse 1.6s ease-in-out infinite;
+}
+.savebar__saved { color: #5fd8a4; display: flex; align-items: center; gap: 5px; }
+.savebar__idle { color: var(--text-faint); }
+.savebar__right { display: flex; gap: 8px; align-items: center; }
+
+@keyframes pm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* Slide-up transition for the save bar */
+.pm-slide-up-enter-active, .pm-slide-up-leave-active {
+  transition: opacity 0.25s, transform 0.25s;
+}
+.pm-slide-up-enter-from, .pm-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
 </style>
