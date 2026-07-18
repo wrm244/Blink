@@ -104,9 +104,10 @@ export default {
     breathe: "Breathe and rest your eyes",
   },
   notice: {
-    title: "Break in {sec}s",
+    title: "Break starting",
     sub: "Wrap up your task - your screen will rest soon.",
     postpone: "Postpone",
+    secondsShort: "s",
   },
   actions: {
     breakNow: "Break now",

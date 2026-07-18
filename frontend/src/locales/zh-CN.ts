@@ -104,9 +104,10 @@ export default {
     breathe: "深呼吸，放松眼睛",
   },
   notice: {
-    title: "{sec} 秒后开始休息",
+    title: "即将开始休息",
     sub: "整理一下手头的工作，屏幕即将进入休息。",
     postpone: "推迟",
+    secondsShort: "秒",
   },
   actions: {
     breakNow: "立即休息",
