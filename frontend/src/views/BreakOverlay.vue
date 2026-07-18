@@ -4,7 +4,8 @@ import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import { Phase } from '../../bindings/pocketmind/internal/breakengine/models'
-import { Button } from '@/components/ui/button'
+import { SkipForward } from 'lucide-vue-next'
+import GButton from '@/components/GButton.vue'
 
 const { t } = useI18n()
 const phase = ref<string>('')
@@ -27,43 +28,59 @@ onUnmounted(() => off?.())
 
 const isLong = computed(() => phase.value === Phase.PhaseLongBreak)
 const label = computed(() => (isLong.value ? t('break.longLabel') : t('break.shortLabel')))
-// Ring progress: fraction elapsed (grows as the break advances).
-const ringFraction = computed(() => {
+
+// Ring: fraction elapsed grows as the break advances.
+const fraction = computed(() => {
   if (total.value <= 0) return 0
-  return 1 - remaining.value / total.value
+  return Math.max(0, Math.min(1, 1 - remaining.value / total.value))
 })
-const RADIUS = 150
-const CIRC = 2 * Math.PI * RADIUS
-const dashOffset = computed(() => CIRC * (1 - ringFraction.value))
+const R = 150
+const CIRC = 2 * Math.PI * R
+const dashOffset = computed(() => CIRC * (1 - fraction.value))
 
-const m = computed(() => Math.floor(remaining.value / 60))
-const s = computed(() => remaining.value % 60)
-const clock = computed(() => `${m.value}:${String(s.value).padStart(2, '0')}`)
-
+const clock = computed(() => {
+  const m = Math.floor(remaining.value / 60)
+  const s = remaining.value % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+})
 function skip() { BreakService.SkipBreak() }
 </script>
 
 <template>
   <div class="overlay">
     <div class="glow" aria-hidden="true" />
+    <div class="glow glow--2" aria-hidden="true" />
     <main class="content">
       <p class="label">{{ label }}</p>
 
       <div class="ring-wrap">
         <svg class="ring" viewBox="0 0 340 340">
-          <circle class="ring-track" cx="170" cy="170" :r="RADIUS" />
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#6b8dff" />
+              <stop offset="100%" stop-color="#9b7dff" />
+            </linearGradient>
+          </defs>
+          <circle class="ring-track" cx="170" cy="170" :r="R" />
           <circle
             class="ring-progress"
-            cx="170" cy="170" :r="RADIUS"
+            cx="170" cy="170" :r="R"
             :stroke-dasharray="CIRC"
             :stroke-dashoffset="dashOffset"
+            stroke="url(#ringGrad)"
           />
         </svg>
-        <div class="clock">{{ clock }}</div>
+        <div class="clock-wrap">
+          <div class="clock tabular-nums">{{ clock }}</div>
+          <div class="breathe" aria-hidden="true" />
+        </div>
       </div>
 
       <p class="hint">{{ t('break.hint') }}</p>
-      <Button variant="secondary" size="lg" class="backdrop-blur" @click="skip">{{ t('break.skip') }}</Button>
+      <GButton variant="glass" size="lg" @click="skip">
+        <SkipForward class="size-4" />
+        {{ t('break.skip') }}
+      </GButton>
     </main>
   </div>
 </template>
@@ -75,38 +92,49 @@ function skip() { BreakService.SkipBreak() }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 10, 20, 0.55);
-  color: #f4f6fb;
+  background: radial-gradient(circle at 50% 40%, #1a1d28 0%, #0c0e14 100%);
+  color: #f0f2f6;
   user-select: none;
+  overflow: hidden;
 }
 .glow {
   position: absolute;
   width: 70vmin;
   height: 70vmin;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(91, 157, 255, 0.22), transparent 70%);
-  filter: blur(50px);
+  background: radial-gradient(circle, rgba(107, 141, 255, 0.2), transparent 70%);
+  filter: blur(60px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.glow--2 {
+  width: 50vmin;
+  height: 50vmin;
+  background: radial-gradient(circle, rgba(155, 125, 255, 0.14), transparent 70%);
+  transform: translate(-30%, -60%);
 }
 .content {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 26px;
   text-align: center;
+  animation: pm-scale-in 0.6s ease both;
 }
 .label {
   margin: 0;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
   font-size: 13px;
   font-weight: 500;
-  color: rgba(244, 246, 251, 0.6);
+  color: rgba(240, 242, 246, 0.55);
 }
 .ring-wrap {
   position: relative;
-  width: 340px;
-  height: 340px;
+  width: 320px;
+  height: 320px;
   display: grid;
   place-items: center;
 }
@@ -119,29 +147,41 @@ function skip() { BreakService.SkipBreak() }
 }
 .ring-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 6;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 5;
 }
 .ring-progress {
   fill: none;
-  stroke: url(#grad);
-  stroke: #5b9dff;
   stroke-width: 6;
   stroke-linecap: round;
   transition: stroke-dashoffset 1s linear;
-  filter: drop-shadow(0 0 8px rgba(91, 157, 255, 0.5));
+  filter: drop-shadow(0 0 10px rgba(107, 141, 255, 0.6));
+}
+.clock-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
 }
 .clock {
-  font-size: clamp(64px, 14vmin, 112px);
+  font-size: clamp(64px, 13vmin, 104px);
   font-weight: 250;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+.breathe {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(107, 141, 255, 0.8);
+  bottom: -28px;
+  animation: pm-breathe 2.4s ease-in-out infinite;
 }
 .hint {
   margin: 0;
   max-width: 34ch;
   font-size: 15px;
-  color: rgba(244, 246, 251, 0.48);
+  color: rgba(240, 242, 246, 0.45);
 }
 </style>

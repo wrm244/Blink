@@ -10,8 +10,19 @@ export default {
     longbreak: "Long break · {time}",
     paused: "Paused",
     idle: "Paused (inactive)",
-    waiting: "Awaiting setup",
+    waiting: "Ready to start",
     none: "-",
+    nextBreak: "Next break",
+    remaining: "Remaining",
+    breakIn: "Break in {sec}s",
+  },
+  hero: {
+    focusing: "Focusing",
+    resting: "Resting",
+    paused: "Paused",
+    startFocus: "Start focusing",
+    progress: "Progress",
+    breakCount: "{n} breaks done",
   },
   onboarding: {
     welcome: "Welcome to PocketMind",
@@ -72,6 +83,7 @@ export default {
     longLabel: "Long break",
     hint: "Look at something about 20 feet away and relax your eyes.",
     skip: "Skip break",
+    breathe: "Breathe and rest your eyes",
   },
   notice: {
     title: "Break in {sec}s",

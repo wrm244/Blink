@@ -10,22 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.2",
+    "@tailwindcss/vite": "4.3.3",
     "@wailsio/runtime": "latest",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-vue-next": "^1.0.0",
-    "reka-ui": "^2.10.1",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.2",
-    "vue": "^3.2.45",
-    "vue-i18n": "^11.4.6"
+    "clsx": "2.1.1",
+    "lucide-vue-next": "1.0.0",
+    "reka-ui": "2.10.1",
+    "tailwind-merge": "3.6.0",
+    "tailwindcss": "4.3.3",
+    "vue": "3.5.40",
+    "vue-i18n": "11.4.6"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.0",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.5",
-    "vue-tsc": "^3.3.7"
+    "@vitejs/plugin-vue": "6.0.8",
+    "typescript": "5.9.3",
+    "vite": "8.1.5",
+    "vue-tsc": "3.3.7"
   },
   "packageManager": "pnpm@10.29.2+sha512.bef43fa759d91fd2da4b319a5a0d13ef7a45bb985a3d7342058470f9d2051a3ba8674e629672654686ef9443ad13a82da2beb9eeb3e0221c87b8154fff9d74b8"
 }

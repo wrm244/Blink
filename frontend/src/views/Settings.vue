@@ -5,16 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import type { Settings } from '../../bindings/pocketmind/internal/config/models'
 import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
-import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Slider } from '@/components/ui/slider'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor, Sparkles, Keyboard, Info, Timer, Coffee, Settings as Settings2 } from 'lucide-vue-next'
+import GButton from '@/components/GButton.vue'
+import GlassPanel from '@/components/GlassPanel.vue'
+import GSlider from '@/components/GSlider.vue'
+import GToggle from '@/components/GToggle.vue'
+import GSegmented from '@/components/GSegmented.vue'
 import { setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
 
@@ -24,406 +20,463 @@ const s = reactive({} as Settings)
 const state = ref<State>({} as State)
 const dirty = ref(false)
 const saved = ref(false)
+const tab = ref('timing')
 let off: (() => void) | undefined
 
 onMounted(async () => {
   Object.assign(s, await BreakService.GetSettings())
-  // Apply the persisted theme + locale from settings.
   applyTheme((s.theme as Theme) || 'system')
   if (s.language === 'zh-CN' || s.language === 'en') {
     setLocale(s.language)
     locale.value = s.language
   }
   state.value = await BreakService.GetState()
-  off = Events.On('pm:tick', (ev: { data: State }) => {
-    state.value = ev.data
-  })
+  off = Events.On('pm:tick', (ev: { data: State }) => { state.value = ev.data })
 })
 onUnmounted(() => off?.())
 
 const onboarded = computed(() => s.onboarded === true)
-// "Paused" covers both an explicit user pause and the idle (inactivity) pause.
 const isPaused = computed(() => state.value.paused || state.value.phase === 'idle')
+const isBreak = computed(() => state.value.phase === 'shortbreak' || state.value.phase === 'longbreak')
+const isPreBreak = computed(() => state.value.phase === 'prebreak')
 
-function touch() {
-  dirty.value = true
-  saved.value = false
-}
-
-function changeLanguage(v: string) {
-  setLocale(v as Locale)
-  locale.value = v
-  s.language = v
-  touch()
-}
-
-function changeTheme(v: string) {
-  s.theme = v
-  applyTheme(v as Theme)
-  touch()
-}
+function touch() { dirty.value = true; saved.value = false }
+function changeLanguage(v: string) { setLocale(v as Locale); locale.value = v; s.language = v; touch() }
+function changeTheme(v: string) { s.theme = v; applyTheme(v as Theme); touch() }
 
 async function save() {
   await BreakService.SaveSettings({ ...s })
   dirty.value = false
   saved.value = true
 }
-
 async function completeOnboarding() {
   s.onboarded = true
   await BreakService.SaveSettings({ ...s })
   await BreakService.CompleteOnboarding()
   dirty.value = false
 }
-
 function startBreak() { BreakService.StartBreakNow() }
-function togglePause() {
-  if (isPaused.value) BreakService.Resume()
-  else BreakService.Pause()
-}
+function togglePause() { isPaused.value ? BreakService.Resume() : BreakService.Pause() }
 
-// Slider values are bound as number[] (reka-ui Slider contract); convert.
-function num(v: number[] | undefined, fallback: number): number[] {
-  return v && v.length ? v : [fallback]
-}
-function setNum(field: keyof Settings, v: number[] | undefined) {
-  ;(s as any)[field] = v?.[0] ?? 0
-  touch()
-}
+function setNum(field: keyof Settings, v: number) { (s as any)[field] = v; touch() }
 
-const phaseLabel = computed(() => {
+// Hero progress: fraction of the current phase elapsed (grows as it advances).
+const progress = computed(() => {
+  const total = state.value.totalSec
+  const rem = state.value.remainingSec
+  if (!total || total <= 0) return 0
+  return Math.max(0, Math.min(1, 1 - rem / total))
+})
+
+const heroTitle = computed(() => {
   switch (state.value.phase) {
-    case 'focusing': return t('status.focusing', { time: fmt(state.value.remainingSec) })
-    case 'prebreak': return t('status.prebreak', { sec: state.value.remainingSec })
-    case 'shortbreak': return t('status.shortbreak', { time: fmt(state.value.remainingSec) })
-    case 'longbreak': return t('status.longbreak', { time: fmt(state.value.remainingSec) })
-    case 'paused': return t('status.paused')
-    case 'idle': return t('status.idle')
-    default: return t('status.waiting')
+    case 'focusing': return t('hero.focusing')
+    case 'shortbreak': case 'longbreak': return t('hero.resting')
+    case 'paused': case 'idle': return t('hero.paused')
+    case 'prebreak': return t('hero.resting')
+    default: return t('hero.startFocus')
+  }
+})
+const heroSub = computed(() => {
+  switch (state.value.phase) {
+    case 'focusing': return t('status.breakIn', { sec: state.value.remainingSec })
+    case 'prebreak': return t('status.breakIn', { sec: state.value.remainingSec })
+    case 'shortbreak': case 'longbreak': return t('status.remaining') + ' ' + fmt(state.value.remainingSec)
+    case 'paused': case 'idle': return t('status.paused')
+    default: return t('onboarding.intro2')
   }
 })
 const phaseColor = computed(() => {
   switch (state.value.phase) {
-    case 'shortbreak': case 'longbreak': return 'oklch(0.72 0.17 145)'
-    case 'prebreak': return 'oklch(0.78 0.16 70)'
-    case 'paused': case 'idle': return 'oklch(0.66 0.01 264)'
-    default: return 'oklch(0.62 0.17 255)'
+    case 'shortbreak': case 'longbreak': return '#5fd8a4'
+    case 'prebreak': return '#ffb454'
+    case 'paused': case 'idle': return '#9aa2b1'
+    default: return '#6b8dff'
   }
 })
+const heroTime = computed(() => fmt(state.value.remainingSec))
 function fmt(sec: number): string {
   const m = Math.floor(sec / 60)
   const ss = sec % 60
   return `${m}:${String(ss).padStart(2, '0')}`
 }
+
+const themeOptions = [
+  { value: 'system', label: '', icon: Monitor },
+  { value: 'light', label: '', icon: Sun },
+  { value: 'dark', label: '', icon: Moon },
+]
+const langOptions = [
+  { value: 'zh-CN', label: '中' },
+  { value: 'en', label: 'EN' },
+]
+const tabs = computed(() => [
+  { value: 'timing', label: t('nav.timing'), icon: Timer },
+  { value: 'options', label: t('nav.options'), icon: Sparkles },
+  { value: 'shortcuts', label: t('nav.shortcuts'), icon: Keyboard },
+  { value: 'about', label: t('nav.about'), icon: Info },
+])
+
+// Timing rows config drives the template loop.
+const timingRows = computed(() => [
+  { key: 'focusDurationMin' as const, label: t('timing.focusDuration'), desc: t('timing.focusDesc'), value: s.focusDurationMin, unit: t('timing.minutes'), min: 5, max: 60, step: 1 },
+  { key: 'shortBreakDurationSec' as const, label: t('timing.shortBreak'), desc: t('timing.shortDesc'), value: s.shortBreakDurationSec, unit: t('timing.seconds'), min: 5, max: 120, step: 5 },
+  { key: 'longBreakDurationMin' as const, label: t('timing.longBreak'), desc: t('timing.longDesc'), value: s.longBreakDurationMin, unit: t('timing.minutes'), min: 1, max: 20, step: 1 },
+  { key: 'longBreakInterval' as const, label: t('timing.longBreakEvery'), desc: t('timing.everyDesc'), value: s.longBreakInterval, unit: t('timing.breaks'), min: 1, max: 10, step: 1 },
+  { key: 'preBreakWarningSec' as const, label: t('timing.preBreakWarning'), desc: t('timing.preDesc'), value: s.preBreakWarningSec ?? 0, unit: t('timing.seconds'), min: 0, max: 60, step: 5 },
+  { key: 'idleThresholdMin' as const, label: t('timing.idlePause'), desc: t('timing.idleDesc'), value: s.idleThresholdMin, unit: t('timing.minutes'), min: 1, max: 30, step: 1 },
+])
+
+const shortcutRows = computed(() => [
+  { key: 'shortcutStartBreak' as const, label: t('shortcuts.startBreak'), icon: Clock, value: s.shortcutStartBreak, placeholder: 'Cmd+Shift+B' },
+  { key: 'shortcutSkipBreak' as const, label: t('shortcuts.skipBreak'), icon: Play, value: s.shortcutSkipBreak, placeholder: 'Cmd+Shift+S' },
+  { key: 'shortcutPostponeBreak' as const, label: t('shortcuts.postponeBreak'), icon: Clock, value: s.shortcutPostponeBreak, placeholder: 'Cmd+Shift+P' },
+  { key: 'shortcutPreferences' as const, label: t('shortcuts.preferences'), icon: Settings2, value: s.shortcutPreferences, placeholder: 'Cmd+Shift+,' },
+])
 </script>
 
 <template>
-  <div class="prefs-root">
-    <!-- Header -->
-    <header class="flex items-center justify-between gap-3 px-7 pt-12 pb-2">
-      <div class="flex items-center gap-3">
-        <div class="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
-          <Eye class="size-5" />
-        </div>
-        <div>
-          <h1 class="text-[17px] font-semibold tracking-tight leading-tight">{{ t('app.name') }}</h1>
-          <p class="flex items-center gap-1.5 text-[12px] text-muted-foreground mt-0.5">
-            <span class="size-1.5 rounded-full" :style="{ background: phaseColor, boxShadow: `0 0 6px ${phaseColor}` }" />
-            <span class="tabular-nums">{{ phaseLabel }}</span>
-          </p>
-        </div>
-      </div>
-      <div class="flex items-center gap-2" v-if="onboarded">
-        <Button variant="ghost" size="sm" @click="togglePause">
-          <component :is="isPaused ? Play : Pause" class="size-3.5" />
-          {{ isPaused ? t('actions.resume') : t('actions.pause') }}
-        </Button>
-        <Button variant="secondary" size="sm" @click="startBreak">
-          <Clock class="size-3.5" />
-          {{ t('actions.breakNow') }}
-        </Button>
-      </div>
-    </header>
+  <div class="root">
+    <!-- Ambient backdrop: gradient + soft glows behind the glass. -->
+    <div class="backdrop" aria-hidden="true">
+      <div class="glow glow-a" />
+      <div class="glow glow-b" />
+    </div>
 
-    <!-- Onboarding -->
-    <section v-if="!onboarded" class="px-7 pt-2 pb-6 flex-1 flex flex-col">
-      <Card class="border-primary/20 bg-primary/[0.04]">
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2 text-base">
-            <Languages class="size-4 text-primary" />
-            {{ t('onboarding.welcome') }}
-          </CardTitle>
-          <CardDescription class="leading-relaxed">
-            {{ t('onboarding.intro') }}<br />
-            <span class="text-muted-foreground/70">{{ t('onboarding.intro2') }}</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-5">
-          <!-- language + appearance, side by side -->
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
-              <Select :model-value="locale" @update:model-value="changeLanguage">
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zh-CN">简体中文</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
+    <div class="content">
+      <!-- HERO STATUS CARD -->
+      <GlassPanel strong class="hero" :class="{ 'hero--break': isBreak, 'hero--pre': isPreBreak }">
+        <div class="hero__top">
+          <div class="hero__brand">
+            <div class="hero__logo">
+              <Eye class="size-5" />
             </div>
-            <div class="space-y-1.5">
-              <Label class="flex items-center gap-1.5"><Sun class="size-3.5" />{{ t('options.theme') }}</Label>
-              <Select :model-value="s.theme || 'system'" @update:model-value="changeTheme">
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="system">{{ t('options.themeSystem') }}</SelectItem>
-                  <SelectItem value="light">{{ t('options.themeLight') }}</SelectItem>
-                  <SelectItem value="dark">{{ t('options.themeDark') }}</SelectItem>
-                </SelectContent>
-              </Select>
+            <div>
+              <h1 class="hero__title">{{ t('app.name') }}</h1>
+              <p class="hero__sub">
+                <span class="hero__dot" :style="{ background: phaseColor, boxShadow: `0 0 8px ${phaseColor}` }" />
+                <span class="hero__label">{{ heroTitle }}</span>
+              </p>
             </div>
           </div>
 
-          <Separator />
+          <div v-if="onboarded" class="hero__clock">
+            <span class="hero__time tabular-nums" v-if="state.phase">{{ heroTime }}</span>
+          </div>
+        </div>
 
-          <!-- quick defaults preview -->
-          <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('timing.focusDuration') }}</span>
-              <span class="font-medium tabular-nums">{{ s.focusDurationMin }} {{ t('timing.minutes') }}</span>
+        <!-- Progress bar (when running). -->
+        <div v-if="onboarded && state.phase && !isPaused" class="hero__progress">
+          <div class="hero__progress-bar" :style="{ width: (progress * 100) + '%', background: `linear-gradient(90deg, ${phaseColor}, var(--accent-2))` }" />
+        </div>
+
+        <div class="hero__bar">
+          <span class="hero__hint">{{ heroSub }}</span>
+          <div v-if="onboarded" class="hero__actions">
+            <GButton variant="glass" size="sm" @click="togglePause">
+              <component :is="isPaused ? Play : Pause" class="size-3.5" />
+              {{ isPaused ? t('actions.resume') : t('actions.pause') }}
+            </GButton>
+            <GButton variant="primary" size="sm" @click="startBreak">
+              <Clock class="size-3.5" />
+              {{ t('actions.breakNow') }}
+            </GButton>
+          </div>
+        </div>
+
+        <!-- Onboarding controls (first run only). -->
+        <div v-if="!onboarded" class="onboard">
+          <div class="onboard__row">
+            <div class="onboard__field">
+              <span class="onboard__label"><Languages class="size-3.5" />{{ t('onboarding.language') }}</span>
+              <GSegmented :options="langOptions" :model-value="locale" @update:model-value="changeLanguage" />
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('timing.shortBreak') }}</span>
-              <span class="font-medium tabular-nums">{{ s.shortBreakDurationSec }} {{ t('timing.seconds') }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('timing.longBreak') }}</span>
-              <span class="font-medium tabular-nums">{{ s.longBreakDurationMin }} {{ t('timing.minutes') }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('timing.longBreakEvery') }}</span>
-              <span class="font-medium tabular-nums">{{ s.longBreakInterval }} {{ t('timing.breaks') }}</span>
+            <div class="onboard__field">
+              <span class="onboard__label"><Sun class="size-3.5" />{{ t('options.theme') }}</span>
+              <GSegmented :options="themeOptions.map(o => ({ value: o.value, label: t('options.theme' + (o.value === 'system' ? 'System' : o.value === 'light' ? 'Light' : 'Dark')), icon: o.icon }))" :model-value="s.theme || 'system'" @update:model-value="changeTheme" />
             </div>
           </div>
+          <GButton variant="primary" size="lg" class="onboard__start" @click="completeOnboarding">
+            <Play class="size-4" />
+            {{ t('onboarding.startButton') }}
+          </GButton>
+        </div>
+      </GlassPanel>
 
-          <p class="text-xs text-muted-foreground/70">
-            {{ t('about.ruleDesc') }}
-          </p>
-        </CardContent>
-      </Card>
+      <!-- REGULAR SETTINGS (onboarded) -->
+      <template v-if="onboarded">
+        <GSegmented class="nav" :options="tabs.map(t2 => ({ value: t2.value, label: t2.label, icon: t2.icon }))" :model-value="tab" @update:model-value="(v) => tab = v" />
 
-      <div class="mt-auto pt-6 flex justify-end">
-        <Button size="lg" @click="completeOnboarding" class="min-w-[140px]">
-          <Play class="size-4" />
-          {{ t('onboarding.startButton') }}
-        </Button>
-      </div>
-    </section>
+        <div class="panels">
+          <!-- TIMING -->
+          <div v-show="tab === 'timing'" class="panel-stack">
+            <GlassPanel v-for="row in timingRows" :key="row.key" class="timing-row">
+              <div class="timing-row__head">
+                <div>
+                  <div class="timing-row__label">{{ row.label }}</div>
+                  <div class="timing-row__desc">{{ row.desc }}</div>
+                </div>
+                <div class="timing-row__value tabular-nums">{{ row.value }}<span class="timing-row__unit">{{ row.unit }}</span></div>
+              </div>
+              <GSlider :model-value="row.value" :min="row.min" :max="row.max" :step="row.step" @update:model-value="(v: number) => setNum(row.key, v)" />
+            </GlassPanel>
+          </div>
 
-    <!-- Regular settings -->
-    <section v-else class="px-7 pb-4 flex-1 min-h-0">
-      <Tabs default-value="timing" class="flex h-full flex-col">
-        <TabsList class="self-start">
-          <TabsTrigger value="timing"><Clock class="size-3.5 mr-1" />{{ t('nav.timing') }}</TabsTrigger>
-          <TabsTrigger value="options">{{ t('nav.options') }}</TabsTrigger>
-          <TabsTrigger value="shortcuts">{{ t('nav.shortcuts') }}</TabsTrigger>
-          <TabsTrigger value="about">{{ t('nav.about') }}</TabsTrigger>
-        </TabsList>
+          <!-- OPTIONS -->
+          <div v-show="tab === 'options'" class="panel-stack">
+            <GlassPanel class="opt-row">
+              <div class="opt-row__left">
+                <span class="opt-row__label"><Sun class="size-4" />{{ t('options.theme') }}</span>
+                <span class="opt-row__desc">{{ t('options.themeDesc') }}</span>
+              </div>
+              <GSegmented :options="themeOptions.map(o => ({ value: o.value, label: t('options.theme' + (o.value === 'system' ? 'System' : o.value === 'light' ? 'Light' : 'Dark')), icon: o.icon }))" :model-value="s.theme || 'system'" @update:model-value="changeTheme" />
+            </GlassPanel>
+            <GlassPanel class="opt-row">
+              <div class="opt-row__left">
+                <span class="opt-row__label"><Languages class="size-4" />{{ t('onboarding.language') }}</span>
+                <span class="opt-row__desc">{{ locale === 'zh-CN' ? '简体中文' : 'English' }}</span>
+              </div>
+              <GSegmented :options="langOptions" :model-value="locale" @update:model-value="changeLanguage" />
+            </GlassPanel>
+            <GlassPanel class="opt-row">
+              <div class="opt-row__left">
+                <span class="opt-row__label"><Coffee class="size-4" />{{ t('options.longBreaks') }}</span>
+                <span class="opt-row__desc">{{ t('options.longBreaksDesc') }}</span>
+              </div>
+              <GToggle :model-value="s.enableLongBreaks" @update:model-value="(v: boolean) => { s.enableLongBreaks = v; touch() }" />
+            </GlassPanel>
+            <GlassPanel class="opt-row">
+              <div class="opt-row__left">
+                <span class="opt-row__label"><Bell class="size-4" />{{ t('options.sound') }}</span>
+                <span class="opt-row__desc">{{ t('options.soundDesc') }}</span>
+              </div>
+              <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => { s.soundEnabled = v; touch() }" />
+            </GlassPanel>
+            <GlassPanel class="opt-row">
+              <div class="opt-row__left">
+                <span class="opt-row__label"><Play class="size-4" />{{ t('options.autoStart') }}</span>
+                <span class="opt-row__desc">{{ t('options.autoStartDesc') }}</span>
+              </div>
+              <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => { s.autoStart = v; touch() }" />
+            </GlassPanel>
+          </div>
 
-        <!-- Timing -->
-        <TabsContent value="timing" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>{{ t('timing.title') }}</CardTitle>
-            </CardHeader>
-            <CardContent class="space-y-7">
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.focusDuration') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.focusDurationMin }} {{ t('timing.minutes') }}</span>
-                </div>
-                <Slider :model-value="num(s.focusDurationMin ? [s.focusDurationMin] : undefined, 20)" :min="5" :max="60" :step="1" @update:model-value="(v:any) => setNum('focusDurationMin', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.focusDesc') }}</p>
-              </div>
-              <Separator />
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.shortBreak') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.shortBreakDurationSec }} {{ t('timing.seconds') }}</span>
-                </div>
-                <Slider :model-value="num(s.shortBreakDurationSec ? [s.shortBreakDurationSec] : undefined, 20)" :min="5" :max="120" :step="5" @update:model-value="(v:any) => setNum('shortBreakDurationSec', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.shortDesc') }}</p>
-              </div>
-              <Separator />
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.longBreak') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.longBreakDurationMin }} {{ t('timing.minutes') }}</span>
-                </div>
-                <Slider :model-value="num(s.longBreakDurationMin ? [s.longBreakDurationMin] : undefined, 5)" :min="1" :max="20" :step="1" @update:model-value="(v:any) => setNum('longBreakDurationMin', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.longDesc') }}</p>
-              </div>
-              <Separator />
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.longBreakEvery') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.longBreakInterval }} {{ t('timing.breaks') }}</span>
-                </div>
-                <Slider :model-value="num(s.longBreakInterval ? [s.longBreakInterval] : undefined, 4)" :min="1" :max="10" :step="1" @update:model-value="(v:any) => setNum('longBreakInterval', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.everyDesc') }}</p>
-              </div>
-              <Separator />
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.preBreakWarning') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.preBreakWarningSec }} {{ t('timing.seconds') }}</span>
-                </div>
-                <Slider :model-value="num(s.preBreakWarningSec !== undefined ? [s.preBreakWarningSec] : undefined, 10)" :min="0" :max="60" :step="5" @update:model-value="(v:any) => setNum('preBreakWarningSec', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.preDesc') }}</p>
-              </div>
-              <Separator />
-              <div class="space-y-2">
-                <div class="flex items-baseline justify-between">
-                  <Label>{{ t('timing.idlePause') }}</Label>
-                  <span class="text-sm tabular-nums text-primary font-medium">{{ s.idleThresholdMin }} {{ t('timing.minutes') }}</span>
-                </div>
-                <Slider :model-value="num(s.idleThresholdMin ? [s.idleThresholdMin] : undefined, 5)" :min="1" :max="30" :step="1" @update:model-value="(v:any) => setNum('idleThresholdMin', v)" />
-                <p class="text-xs text-muted-foreground">{{ t('timing.idleDesc') }}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+          <!-- SHORTCUTS -->
+          <div v-show="tab === 'shortcuts'" class="panel-stack">
+            <GlassPanel v-for="row in shortcutRows" :key="row.key" class="shortcut-row">
+              <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
+              <input
+                class="keycap"
+                :value="row.value"
+                :placeholder="row.placeholder"
+                @input="(e) => { (s as any)[row.key] = (e.target as HTMLInputElement).value; touch() }"
+              />
+            </GlassPanel>
+            <p class="hint">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
+          </div>
 
-        <!-- Options -->
-        <TabsContent value="options" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
-          <Card>
-            <CardHeader><CardTitle>{{ t('options.title') }}</CardTitle></CardHeader>
-            <CardContent class="space-y-1">
-              <!-- appearance -->
-              <div class="flex items-center justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label class="flex items-center gap-1.5"><Sun class="size-3.5" />{{ t('options.theme') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ t('options.themeDesc') }}</p>
+          <!-- ABOUT -->
+          <div v-show="tab === 'about'" class="panel-stack">
+            <GlassPanel class="about">
+              <div class="about__head">
+                <div class="about__logo"><Eye class="size-6" /></div>
+                <div>
+                  <div class="about__name">{{ t('app.name') }}</div>
+                  <div class="about__ver">{{ t('about.version') }} 0.1.0</div>
                 </div>
-                <Select :model-value="s.theme || 'system'" @update:model-value="changeTheme">
-                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="system"><span class="flex items-center gap-2"><Monitor class="size-3.5" />{{ t('options.themeSystem') }}</span></SelectItem>
-                    <SelectItem value="light"><span class="flex items-center gap-2"><Sun class="size-3.5" />{{ t('options.themeLight') }}</span></SelectItem>
-                    <SelectItem value="dark"><span class="flex items-center gap-2"><Moon class="size-3.5" />{{ t('options.themeDark') }}</span></SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
-              <Separator />
-              <!-- language -->
-              <div class="flex items-center justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ locale === 'zh-CN' ? '简体中文' : 'English' }}</p>
-                </div>
-                <Select :model-value="locale" @update:model-value="changeLanguage">
-                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zh-CN">简体中文</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
+              <p class="about__desc">{{ t('about.description') }}</p>
+              <div class="about__rule">
+                <div class="about__rule-title"><Sparkles class="size-4" />{{ t('about.rule') }}</div>
+                <p class="about__rule-desc">{{ t('about.ruleDesc') }}</p>
               </div>
-              <Separator />
-              <div class="flex items-start justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label>{{ t('options.longBreaks') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ t('options.longBreaksDesc') }}</p>
-                </div>
-                <Switch :model-value="s.enableLongBreaks" @update:model-value="(v:any) => { s.enableLongBreaks = v; touch() }" />
-              </div>
-              <Separator />
-              <div class="flex items-start justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label class="flex items-center gap-1.5"><Bell class="size-3.5" />{{ t('options.sound') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ t('options.soundDesc') }}</p>
-                </div>
-                <Switch :model-value="s.soundEnabled" @update:model-value="(v:any) => { s.soundEnabled = v; touch() }" />
-              </div>
-              <Separator />
-              <div class="flex items-start justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label>{{ t('options.autoStart') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ t('options.autoStartDesc') }}</p>
-                </div>
-                <Switch :model-value="s.autoStart" @update:model-value="(v:any) => { s.autoStart = v; touch() }" />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </GlassPanel>
+          </div>
+        </div>
 
-        <!-- Shortcuts -->
-        <TabsContent value="shortcuts" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
-          <Card>
-            <CardHeader><CardTitle>{{ t('shortcuts.title') }}</CardTitle></CardHeader>
-            <CardContent class="space-y-4">
-              <div class="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div class="space-y-1.5">
-                  <Label>{{ t('shortcuts.startBreak') }}</Label>
-                  <Input :model-value="s.shortcutStartBreak" @update:model-value="(v:any) => { s.shortcutStartBreak = v; touch() }" placeholder="Cmd+Shift+B" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label>{{ t('shortcuts.skipBreak') }}</Label>
-                  <Input :model-value="s.shortcutSkipBreak" @update:model-value="(v:any) => { s.shortcutSkipBreak = v; touch() }" placeholder="Cmd+Shift+S" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label>{{ t('shortcuts.postponeBreak') }}</Label>
-                  <Input :model-value="s.shortcutPostponeBreak" @update:model-value="(v:any) => { s.shortcutPostponeBreak = v; touch() }" placeholder="Cmd+Shift+P" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label>{{ t('shortcuts.preferences') }}</Label>
-                  <Input :model-value="s.shortcutPreferences" @update:model-value="(v:any) => { s.shortcutPreferences = v; touch() }" placeholder="Cmd+Shift+," />
-                </div>
-              </div>
-              <p class="text-xs text-muted-foreground">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <!-- About -->
-        <TabsContent value="about" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
-          <Card>
-            <CardHeader>
-              <CardTitle class="flex items-center gap-2"><Eye class="size-4 text-primary" />{{ t('app.name') }}</CardTitle>
-              <CardDescription>{{ t('about.version') }} 0.1.0</CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-4">
-              <p class="text-sm text-muted-foreground leading-relaxed">{{ t('about.description') }}</p>
-              <Separator />
-              <div class="space-y-1">
-                <Label class="text-foreground">{{ t('about.rule') }}</Label>
-                <p class="text-sm text-muted-foreground">{{ t('about.ruleDesc') }}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </section>
-
-    <!-- Footer: settings save only. Day-to-day controls (skip / postpone /
-         reset) live in the tray menu and shortcuts, so the settings panel
-         stays focused on configuration. -->
-    <footer v-if="onboarded" class="flex items-center justify-end gap-2 px-7 py-4 border-t border-border/60">
-      <span class="mr-auto text-xs font-medium text-emerald-500 transition-opacity" :class="saved ? 'opacity-100' : 'opacity-0'">
-        <Check class="inline size-3 mr-1" />{{ t('actions.saved') }}
-      </span>
-      <Button size="sm" :disabled="!dirty" @click="save">{{ t('actions.save') }}</Button>
-    </footer>
+        <!-- FOOTER -->
+        <div class="footer">
+          <span class="footer__saved" :class="{ 'is-on': saved }">
+            <Check class="size-3.5" />{{ t('actions.saved') }}
+          </span>
+          <GButton variant="primary" size="md" :disabled="!dirty" @click="save">{{ t('actions.save') }}</GButton>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.prefs-root {
-  /* Semi-opaque surface over the translucent window: keeps text readable while
-     letting a hint of macOS vibrancy show through, and follows the theme. */
+.root {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+}
+.glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+}
+.glow-a {
+  width: 50vw;
+  height: 50vw;
+  top: -15vw;
+  right: -10vw;
+  background: var(--glow-a);
+}
+.glow-b {
+  width: 40vw;
+  height: 40vw;
+  bottom: -10vw;
+  left: -10vw;
+  background: var(--glow-b);
+}
+.content {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  gap: 14px;
+  padding: 40px 28px 20px;
+  box-sizing: border-box;
 }
+
+/* ---- hero ---- */
+.hero {
+  padding: 20px;
+  animation: pm-fade-up 0.5s ease both;
+}
+.hero--break :deep(.hero__logo) { background: rgba(95, 216, 164, 0.16) !important; }
+.hero__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.hero__brand { display: flex; gap: 12px; align-items: center; }
+.hero__logo {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.hero__title { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.hero__sub { margin: 3px 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.hero__dot { width: 7px; height: 7px; border-radius: 50%; }
+.hero__label { font-weight: 500; }
+.hero__clock { text-align: right; }
+.hero__time { font-size: 30px; font-weight: 260; line-height: 1; color: var(--text); }
+.hero__progress {
+  margin-top: 16px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--track);
+  overflow: hidden;
+}
+.hero__progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s linear;
+}
+.hero__bar {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.hero__hint { font-size: 13px; color: var(--text-muted); }
+.hero__actions { display: flex; gap: 8px; }
+
+/* ---- onboarding block ---- */
+.onboard {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.onboard__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.onboard__field { display: flex; flex-direction: column; gap: 8px; }
+.onboard__label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.onboard__start { align-self: flex-end; min-width: 150px; }
+
+/* ---- nav ---- */
+.nav { align-self: flex-start; animation: pm-fade-up 0.5s 0.05s ease both; }
+
+/* ---- panels ---- */
+.panels { flex: 1; min-height: 0; }
+.panel-stack { display: flex; flex-direction: column; gap: 10px; animation: pm-fade-up 0.4s ease both; }
+
+/* timing rows */
+.timing-row { padding: 16px 18px; }
+.timing-row__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.timing-row__label { font-size: 14px; font-weight: 500; color: var(--text); }
+.timing-row__desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.timing-row__value { font-size: 22px; font-weight: 300; color: var(--accent); }
+.timing-row__unit { font-size: 12px; color: var(--text-faint); margin-left: 4px; font-weight: 400; }
+
+/* option rows */
+.opt-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 18px; }
+.opt-row__left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.opt-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
+.opt-row__desc { font-size: 12px; color: var(--text-faint); }
+
+/* shortcut rows */
+.shortcut-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 18px; }
+.shortcut-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
+.keycap {
+  width: 150px;
+  text-align: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.keycap:focus { border-color: var(--accent); }
+.hint { font-size: 12px; color: var(--text-faint); padding: 0 4px; }
+
+/* about */
+.about { padding: 22px; }
+.about__head { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
+.about__logo { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.about__name { font-size: 17px; font-weight: 600; }
+.about__ver { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.about__desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 16px; }
+.about__rule { padding: 14px; border-radius: 12px; background: var(--accent-soft); }
+.about__rule-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--accent); margin-bottom: 6px; }
+.about__rule-desc { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+
+/* footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 4px;
+}
+.footer__saved {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5fd8a4;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.footer__saved.is-on { opacity: 1; }
 </style>
