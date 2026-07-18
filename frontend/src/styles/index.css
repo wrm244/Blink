@@ -3,127 +3,95 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * PocketMind theme - shadcn-style zinc palette with both light and dark
- * variants. `:root` is light; the `.dark` class (applied to <html> by
- * theme.ts) switches to dark. The window is translucent so macOS vibrancy
- * shows through; each view paints a semi-opaque --surface on top so text
- * stays readable while keeping a hint of native vibrancy.
+ * PocketMind - Glassmorphism design system.
+ * Palette: dark neutral zinc with a blue accent, tuned to read over a
+ * translucent macOS vibrancy window. Each view paints its own layered
+ * gradient backdrop; glass panels sit on top with backdrop blur.
  */
+
 :root {
-  --radius: 0.65rem;
+  /* ---- light theme ---- */
+  --bg-from: #eef1f6;
+  --bg-to: #dfe4ec;
+  --glow-a: rgba(107, 141, 255, 0.18);
+  --glow-b: rgba(160, 130, 255, 0.10);
 
-  --background: oklch(0.99 0.002 264);
-  --foreground: oklch(0.21 0.01 264);
-  --surface: oklch(0.985 0.002 264 / 0.92);
+  --text: #1a1d24;
+  --text-muted: #5a6273;
+  --text-faint: #9aa2b1;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.01 264);
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-hl: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 8px 32px rgba(30, 40, 70, 0.12), 0 2px 8px rgba(30, 40, 70, 0.06);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.01 264);
+  --track: rgba(20, 25, 40, 0.1);
+  --track-fill: #6b8dff;
+  --thumb: #ffffff;
 
-  --primary: oklch(0.55 0.19 258);
-  --primary-foreground: oklch(0.99 0 0);
+  --accent: #6b8dff;
+  --accent-2: #9b7dff;
+  --accent-soft: rgba(107, 141, 255, 0.14);
+  --on-accent: #ffffff;
 
-  --secondary: oklch(0.95 0.003 264);
-  --secondary-foreground: oklch(0.21 0.01 264);
+  --ring-track: rgba(20, 25, 40, 0.1);
+  --ring-progress: #6b8dff;
 
-  --muted: oklch(0.95 0.003 264);
-  --muted-foreground: oklch(0.5 0.01 264);
-
-  --accent: oklch(0.94 0.02 255);
-  --accent-foreground: oklch(0.21 0.01 264);
-
-  --destructive: oklch(0.58 0.22 27);
-  --destructive-foreground: oklch(0.99 0 0);
-
-  --border: oklch(0.9 0.003 264);
-  --input: oklch(0.88 0.003 264);
-  --ring: oklch(0.55 0.19 258);
-
-  --scrollbar-thumb: oklch(0.5 0.01 264 / 0.32);
-  --scrollbar-thumb-hover: oklch(0.5 0.01 264 / 0.5);
-
-  --chart-1: oklch(0.55 0.19 258);
-  --chart-2: oklch(0.65 0.15 200);
-  --chart-3: oklch(0.6 0.18 145);
+  --scrollbar-thumb: rgba(60, 70, 90, 0.28);
+  --scrollbar-thumb-hover: rgba(60, 70, 90, 0.45);
 }
 
 .dark {
-  --background: oklch(0.16 0.012 264);
-  --foreground: oklch(0.93 0.008 264);
-  --surface: oklch(0.14 0.011 264 / 0.92);
+  /* ---- dark theme (primary) ---- */
+  --bg-from: #15171c;
+  --bg-to: #1f2128;
+  --glow-a: rgba(107, 141, 255, 0.16);
+  --glow-b: rgba(160, 130, 255, 0.10);
 
-  --card: oklch(0.2 0.013 264);
-  --card-foreground: oklch(0.93 0.008 264);
+  --text: #f0f2f6;
+  --text-muted: #9aa2b1;
+  --text-faint: #6b7384;
 
-  --popover: oklch(0.2 0.013 264);
-  --popover-foreground: oklch(0.93 0.008 264);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-hl: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
 
-  --primary: oklch(0.62 0.17 255);
-  --primary-foreground: oklch(0.12 0.02 264);
+  --track: rgba(255, 255, 255, 0.1);
+  --track-fill: #6b8dff;
+  --thumb: #f0f2f6;
 
-  --secondary: oklch(0.27 0.014 264);
-  --secondary-foreground: oklch(0.93 0.008 264);
+  --accent: #6b8dff;
+  --accent-2: #9b7dff;
+  --accent-soft: rgba(107, 141, 255, 0.18);
+  --on-accent: #0b0e14;
 
-  --muted: oklch(0.24 0.013 264);
-  --muted-foreground: oklch(0.66 0.012 264);
+  --ring-track: rgba(255, 255, 255, 0.1);
+  --ring-progress: #6b8dff;
 
-  --accent: oklch(0.28 0.02 255);
-  --accent-foreground: oklch(0.93 0.008 264);
-
-  --destructive: oklch(0.62 0.22 27);
-  --destructive-foreground: oklch(0.95 0.01 264);
-
-  --border: oklch(0.3 0.014 264 / 0.5);
-  --input: oklch(0.3 0.014 264 / 0.7);
-  --ring: oklch(0.62 0.17 255);
-
-  --scrollbar-thumb: oklch(0.7 0.008 264 / 0.3);
-  --scrollbar-thumb-hover: oklch(0.7 0.008 264 / 0.5);
-
-  --chart-1: oklch(0.62 0.17 255);
-  --chart-2: oklch(0.7 0.15 200);
-  --chart-3: oklch(0.65 0.18 145);
+  --scrollbar-thumb: rgba(180, 190, 210, 0.22);
+  --scrollbar-thumb-hover: rgba(180, 190, 210, 0.4);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-surface: var(--surface);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
+  --color-bg-from: var(--bg-from);
+  --color-bg-to: var(--bg-to);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
   --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
+  --color-accent-2: var(--accent-2);
+  --color-on-accent: var(--on-accent);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    "PingFang SC", "Helvetica Neue", sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Inter", "PingFang SC", "Helvetica Neue", sans-serif;
 }
 
 @layer base {
   * {
-    border-color: var(--border);
+    border-color: var(--glass-border);
   }
   html,
   body,
@@ -134,18 +102,16 @@
   }
   body {
     background: transparent;
-    color: var(--foreground);
+    color: var(--text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
-  /*
-   * Global, themed scrollbars so the thin scroll area in settings matches the
-   * rest of the UI instead of showing a default browser bar.
-   */
+  /* Themed, thin scrollbars. */
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
   *::-webkit-scrollbar-track {
     background: transparent;
@@ -160,10 +126,105 @@
     background: var(--scrollbar-thumb-hover);
     background-clip: padding-box;
   }
-  /* Hide the scrollbar entirely until the user hovers/scrolls, for a cleaner
-     look in the narrow settings panel. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
+/*
+ * Reusable glass utility. Applied via class="glass" (weak) or "glass-strong".
+ * Defined as plain CSS so it composes cleanly with Tailwind utilities.
+ */
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    position: relative;
+  }
+  /* Subtle top highlight that sells the "glass" look. */
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      var(--glass-hl),
+      transparent 45%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(28px) saturate(170%);
+    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    position: relative;
+  }
+  .glass-strong::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, var(--glass-hl), transparent 45%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.8;
+  }
+}
+
+/* Animations shared across views. */
+@keyframes pm-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pm-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pm-breathe {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+@keyframes pm-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
   }
 }

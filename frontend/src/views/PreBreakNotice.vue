@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
-import { Button } from '@/components/ui/button'
+import GButton from '@/components/GButton.vue'
 
 const { t } = useI18n()
 const remaining = ref(0)
@@ -23,13 +23,15 @@ function postpone() { BreakService.PostponeBreak() }
 
 <template>
   <div class="notice-wrap">
-    <div class="notice">
-      <span class="dot" aria-hidden="true" />
+    <div class="notice glass-strong">
+      <div class="ring" aria-hidden="true">
+        <span class="dot" />
+      </div>
       <div class="body">
         <div class="title">{{ t('notice.title', { sec: remaining }) }}</div>
         <div class="sub">{{ t('notice.sub') }}</div>
       </div>
-      <Button variant="secondary" size="sm" @click="postpone">{{ t('notice.postpone') }}</Button>
+      <GButton variant="glass" size="sm" @click="postpone">{{ t('notice.postpone') }}</GButton>
     </div>
   </div>
 </template>
@@ -38,36 +40,37 @@ function postpone() { BreakService.PostponeBreak() }
 .notice-wrap {
   width: 100%;
   height: 100%;
-  padding: 8px;
+  padding: 6px;
   box-sizing: border-box;
 }
 .notice {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 13px;
   width: 100%;
   height: 100%;
-  padding: 0 18px;
+  padding: 0 16px;
   box-sizing: border-box;
-  background: var(--card);
-  border-radius: 16px;
-  color: var(--card-foreground);
+  border-radius: 14px;
+  color: var(--text);
   user-select: none;
-  border: 1px solid var(--border);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  animation: pm-fade-up 0.4s ease both;
+}
+.ring {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
 }
 .dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: #ffb454;
-  box-shadow: 0 0 12px rgba(255, 180, 84, 0.9);
-  flex-shrink: 0;
-  animation: pulse 1.4s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  box-shadow: 0 0 10px rgba(255, 180, 84, 0.9);
+  animation: pm-breathe 1.6s ease-in-out infinite;
 }
 .body {
   flex: 1;
@@ -80,7 +83,10 @@ function postpone() { BreakService.PostponeBreak() }
 }
 .sub {
   font-size: 11.5px;
-  color: var(--muted-foreground);
+  color: var(--text-faint);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
