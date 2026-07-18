@@ -39,6 +39,8 @@ export default {
     about: "About",
     sectionGeneral: "General",
     sectionCycle: "Break cycle",
+    menu: "Menu",
+    collapse: "Collapse sidebar",
   },
   stats: {
     cycle: "Current cycle",

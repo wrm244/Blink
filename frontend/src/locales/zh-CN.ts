@@ -39,6 +39,8 @@ export default {
     about: "关于",
     sectionGeneral: "通用",
     sectionCycle: "休息周期",
+    menu: "菜单",
+    collapse: "收起侧栏",
   },
   stats: {
     cycle: "当前周期",

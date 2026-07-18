@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import type { Settings } from '../../bindings/pocketmind/internal/config/models'
 import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
-import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor, Sparkles, Keyboard, Info, Timer, Coffee, Settings as Settings2, RotateCcw } from 'lucide-vue-next'
+import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor, Sparkles, Keyboard, Info, Timer, Coffee, Settings as Settings2, RotateCcw, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import GButton from '@/components/GButton.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
 import GSlider from '@/components/GSlider.vue'
@@ -20,6 +20,7 @@ const state = ref<State>({} as State)
 const dirty = ref(false)
 const saved = ref(false)
 const tab = ref('timing')
+const collapsed = ref(false)
 let off: (() => void) | undefined
 
 onMounted(async () => {
@@ -98,7 +99,6 @@ function fmt(sec: number): string {
   return `${m}:${String(ss).padStart(2, '0')}`
 }
 
-// Drawer nav grouped into sections for better organisation.
 const navGeneral = computed(() => [
   { value: 'timing', label: t('nav.timing'), icon: Timer },
   { value: 'options', label: t('nav.options'), icon: Sparkles },
@@ -106,7 +106,6 @@ const navGeneral = computed(() => [
   { value: 'about', label: t('nav.about'), icon: Info },
 ])
 
-// Cycle stats shown in the drawer footer.
 const shortDone = computed(() => state.value.shortBreakCount ?? 0)
 const breaksUntilLong = computed(() => state.value.breaksUntilLong ?? 0)
 const cycleRunning = computed(() => !!state.value.phase && state.value.phase !== 'idle')
@@ -146,10 +145,84 @@ const shortcutRows = computed(() => [
       <div class="glow glow-b" />
     </div>
 
-    <div class="layout">
-      <!-- MAIN (left) -->
+    <div class="layout" :class="{ 'layout--collapsed': collapsed }">
+      <!-- DRAWER (left, collapsible) -->
+      <aside class="drawer">
+        <GlassPanel strong class="drawer__panel">
+          <!-- collapse toggle -->
+          <button class="collapse-btn" @click="collapsed = !collapsed" :title="collapsed ? '' : t('nav.collapse')">
+            <component :is="collapsed ? PanelLeftOpen : PanelLeftClose" class="size-4" />
+            <span v-if="!collapsed" class="collapse-btn__txt">{{ t('nav.menu') }}</span>
+          </button>
+
+          <!-- Collapsed: icon rail -->
+          <nav v-if="collapsed" class="nav nav--rail">
+            <button v-for="item in navGeneral" :key="item.value" class="nav__item nav__item--rail" :class="{ 'nav__item--on': tab === item.value }" @click="tab = item.value" :title="item.label">
+              <component :is="item.icon" class="size-4" />
+            </button>
+          </nav>
+
+          <!-- Expanded: full nav -->
+          <template v-else>
+            <nav class="nav">
+              <div class="nav__section">{{ t('nav.sectionGeneral') }}</div>
+              <button v-for="item in navGeneral" :key="item.value" class="nav__item" :class="{ 'nav__item--on': tab === item.value }" @click="tab = item.value">
+                <component :is="item.icon" class="size-4" />
+                <span>{{ item.label }}</span>
+              </button>
+            </nav>
+
+            <div v-if="onboarded" class="cycle">
+              <div class="nav__section">{{ t('nav.sectionCycle') }}</div>
+              <div class="cycle__grid">
+                <div class="cycle__cell">
+                  <div class="cycle__value tabular-nums">{{ shortDone }}</div>
+                  <div class="cycle__label">{{ t('stats.shortBreaksDone') }}</div>
+                </div>
+                <div class="cycle__cell">
+                  <div class="cycle__value tabular-nums">{{ s.enableLongBreaks ? breaksUntilLong : '-' }}</div>
+                  <div class="cycle__label">{{ t('stats.nextLong') }}</div>
+                </div>
+              </div>
+              <div class="cycle__status">
+                <span class="cycle__dot" :style="{ background: cycleRunning ? phaseColor : '#9aa2b1' }" />
+                <span>{{ cycleRunning ? t('hero.focusing') : t('stats.notRunning') }}</span>
+              </div>
+              <button class="cycle__reset" @click="reset">
+                <RotateCcw class="size-3.5" />{{ t('actions.reset') }}
+              </button>
+            </div>
+
+            <div class="drawer__spacer" />
+
+            <div class="quick">
+              <div class="quick__row">
+                <span class="quick__label"><Sun class="size-3.5" />{{ t('options.theme') }}</span>
+                <div class="seg-row">
+                  <button v-for="o in themeOptions" :key="o.value" class="seg seg--icon" :class="{ 'seg--on': (s.theme || 'system') === o.value }" @click="changeTheme(o.value)" :title="themeLabel(o.value)">
+                    <component :is="o.icon" class="size-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div class="quick__row">
+                <span class="quick__label"><Languages class="size-3.5" />{{ t('onboarding.language') }}</span>
+                <div class="seg-row">
+                  <button v-for="o in langOptions" :key="o.value" class="seg" :class="{ 'seg--on': locale === o.value }" @click="changeLanguage(o.value)">{{ o.label }}</button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="onboarded" class="drawer__foot">
+              <span class="saved" :class="{ 'is-on': saved }"><Check class="size-3.5" />{{ t('actions.saved') }}</span>
+              <GButton variant="primary" size="md" :disabled="!dirty" @click="save">{{ t('actions.save') }}</GButton>
+            </div>
+          </template>
+        </GlassPanel>
+      </aside>
+
+      <!-- MAIN (right) -->
       <main class="main">
-        <!-- HERO -->
+        <!-- HERO (fixed header) -->
         <GlassPanel strong class="hero" :class="{ 'hero--break': isBreak }">
           <div class="hero__top">
             <div class="hero__brand">
@@ -185,7 +258,7 @@ const shortcutRows = computed(() => [
             </div>
           </div>
 
-          <!-- Onboarding (first run): inline in hero area -->
+          <!-- Onboarding (first run) -->
           <div v-if="!onboarded" class="onboard">
             <div class="onboard__intro">{{ t('onboarding.intro') }}</div>
             <div class="onboard__row">
@@ -211,9 +284,8 @@ const shortcutRows = computed(() => [
           </div>
         </GlassPanel>
 
-        <!-- PANEL CONTENT (onboarded only) -->
+        <!-- SCROLLABLE PANEL CONTENT -->
         <div v-if="onboarded" class="panels">
-          <!-- TIMING -->
           <section v-show="tab === 'timing'" class="panel-stack">
             <GlassPanel v-for="row in timingRows" :key="row.key" class="timing-row">
               <div class="timing-row__head">
@@ -227,7 +299,6 @@ const shortcutRows = computed(() => [
             </GlassPanel>
           </section>
 
-          <!-- OPTIONS -->
           <section v-show="tab === 'options'" class="panel-stack">
             <GlassPanel class="opt-row">
               <div class="opt-row__left">
@@ -252,7 +323,6 @@ const shortcutRows = computed(() => [
             </GlassPanel>
           </section>
 
-          <!-- SHORTCUTS -->
           <section v-show="tab === 'shortcuts'" class="panel-stack">
             <GlassPanel v-for="row in shortcutRows" :key="row.key" class="shortcut-row">
               <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
@@ -266,7 +336,6 @@ const shortcutRows = computed(() => [
             <p class="hint">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
           </section>
 
-          <!-- ABOUT -->
           <section v-show="tab === 'about'" class="panel-stack">
             <GlassPanel class="about">
               <div class="about__head">
@@ -285,68 +354,6 @@ const shortcutRows = computed(() => [
           </section>
         </div>
       </main>
-
-      <!-- DRAWER (right) -->
-      <aside class="drawer">
-        <GlassPanel strong class="drawer__panel">
-          <!-- Nav -->
-          <nav class="nav">
-            <div class="nav__section">{{ t('nav.sectionGeneral') }}</div>
-            <button v-for="item in navGeneral" :key="item.value" class="nav__item" :class="{ 'nav__item--on': tab === item.value }" @click="tab = item.value">
-              <component :is="item.icon" class="size-4" />
-              <span>{{ item.label }}</span>
-            </button>
-          </nav>
-
-          <!-- Cycle stats -->
-          <div v-if="onboarded" class="cycle">
-            <div class="nav__section">{{ t('nav.sectionCycle') }}</div>
-            <div class="cycle__grid">
-              <div class="cycle__cell">
-                <div class="cycle__value tabular-nums">{{ shortDone }}</div>
-                <div class="cycle__label">{{ t('stats.shortBreaksDone') }}</div>
-              </div>
-              <div class="cycle__cell">
-                <div class="cycle__value tabular-nums">{{ s.enableLongBreaks ? breaksUntilLong : '—' }}</div>
-                <div class="cycle__label">{{ t('stats.nextLong') }}</div>
-              </div>
-            </div>
-            <div class="cycle__status">
-              <span class="cycle__dot" :style="{ background: cycleRunning ? phaseColor : '#9aa2b1' }" />
-              <span>{{ cycleRunning ? t('hero.focusing') : t('stats.notRunning') }}</span>
-            </div>
-            <button class="cycle__reset" @click="reset">
-              <RotateCcw class="size-3.5" />{{ t('actions.reset') }}
-            </button>
-          </div>
-
-          <div class="drawer__spacer" />
-
-          <!-- Appearance quick settings -->
-          <div class="quick">
-            <div class="quick__row">
-              <span class="quick__label"><Sun class="size-3.5" />{{ t('options.theme') }}</span>
-              <div class="seg-row">
-                <button v-for="o in themeOptions" :key="o.value" class="seg seg--icon" :class="{ 'seg--on': (s.theme || 'system') === o.value }" @click="changeTheme(o.value)" :title="themeLabel(o.value)">
-                  <component :is="o.icon" class="size-3.5" />
-                </button>
-              </div>
-            </div>
-            <div class="quick__row">
-              <span class="quick__label"><Languages class="size-3.5" />{{ t('onboarding.language') }}</span>
-              <div class="seg-row">
-                <button v-for="o in langOptions" :key="o.value" class="seg" :class="{ 'seg--on': locale === o.value }" @click="changeLanguage(o.value)">{{ o.label }}</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Save -->
-          <div v-if="onboarded" class="drawer__foot">
-            <span class="saved" :class="{ 'is-on': saved }"><Check class="size-3.5" />{{ t('actions.saved') }}</span>
-            <GButton variant="primary" size="md" :disabled="!dirty" @click="save">{{ t('actions.save') }}</GButton>
-          </div>
-        </GlassPanel>
-      </aside>
     </div>
   </div>
 </template>
@@ -354,7 +361,7 @@ const shortcutRows = computed(() => [
 <style scoped>
 .root {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   overflow: hidden;
 }
 .backdrop {
@@ -362,6 +369,7 @@ const shortcutRows = computed(() => [
   inset: 0;
   z-index: 0;
   background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+  overflow: hidden;
 }
 .glow {
   position: absolute;
@@ -383,26 +391,183 @@ const shortcutRows = computed(() => [
   background: var(--glow-b);
 }
 
-/* ---- two-column layout ---- */
+/* ---- fixed-height two-column layout ---- */
 .layout {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  height: 100%;
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 268px 1fr;
   gap: 16px;
-  padding: 44px 28px 22px;
+  padding: 44px 24px 20px;
   box-sizing: border-box;
+  transition: grid-template-columns 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
+.layout--collapsed {
+  grid-template-columns: 64px 1fr;
+}
+
+/* ---- drawer (left) ---- */
+.drawer { min-width: 0; min-height: 0; }
+.drawer__panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px;
+  animation: pm-fade-up 0.5s ease both;
+  overflow: hidden;
+}
+.collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.collapse-btn:hover { background: var(--accent-soft); color: var(--text); }
+.layout--collapsed .collapse-btn { justify-content: center; }
+.collapse-btn__txt { letter-spacing: 0.02em; }
+
+.nav__section {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 8px 10px 4px;
+}
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.nav__item:hover { background: var(--accent-soft); color: var(--text); }
+.nav__item--on {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+  box-shadow: 0 6px 16px -6px var(--accent-soft);
+}
+/* icon rail (collapsed) */
+.nav--rail { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.nav__item--rail { justify-content: center; width: 40px; padding: 9px; }
+
+/* cycle stats */
+.cycle { margin-top: 6px; }
+.cycle__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 4px 8px; }
+.cycle__cell {
+  padding: 12px 10px;
+  border-radius: 11px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  text-align: center;
+}
+.cycle__value { font-size: 22px; font-weight: 300; color: var(--text); line-height: 1.1; }
+.cycle__label { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
+.cycle__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 10px 8px;
+}
+.cycle__dot { width: 7px; height: 7px; border-radius: 50%; }
+.cycle__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 4px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cycle__reset:hover { background: var(--accent-soft); color: var(--text); }
+
+.drawer__spacer { flex: 1; min-height: 8px; }
+
+.quick { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--glass-border); }
+.quick__row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 6px; }
+.quick__label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+.seg-row { display: inline-flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+.seg {
+  min-width: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.seg:hover { color: var(--text); }
+.seg--on {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+}
+.seg--icon { display: grid; place-items: center; padding: 5px 8px; }
+
+.drawer__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+}
+.saved {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #5fd8a4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.saved.is-on { opacity: 1; }
+
+/* ---- main (right) ---- */
 .main {
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  min-height: 0;
 }
 
-/* ---- hero ---- */
-.hero { padding: 22px 24px; animation: pm-fade-up 0.5s ease both; }
+.hero { padding: 20px 24px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
 .hero--break :deep(.hero__logo) { background: rgba(95, 216, 164, 0.16) !important; }
 .hero__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .hero__brand { display: flex; gap: 12px; align-items: center; }
@@ -425,7 +590,6 @@ const shortcutRows = computed(() => [
 .hero__hint { font-size: 13px; color: var(--text-muted); }
 .hero__actions { display: flex; gap: 8px; }
 
-/* ---- onboarding ---- */
 .onboard {
   margin-top: 18px;
   padding-top: 18px;
@@ -440,8 +604,14 @@ const shortcutRows = computed(() => [
 .onboard__label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 .onboard__start { align-self: flex-end; min-width: 150px; }
 
-/* ---- panels ---- */
-.panels { flex: 1; min-height: 0; overflow-y: auto; }
+/* scrollable panel area: only this scrolls, window stays fixed height */
+.panels {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
 .panel-stack { display: flex; flex-direction: column; gap: 10px; animation: pm-fade-up 0.4s ease both; }
 
 .timing-row { padding: 16px 20px; }
@@ -483,135 +653,4 @@ const shortcutRows = computed(() => [
 .about__rule { padding: 16px; border-radius: 12px; background: var(--accent-soft); }
 .about__rule-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--accent); margin-bottom: 6px; }
 .about__rule-desc { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; }
-
-/* ---- drawer ---- */
-.drawer { min-width: 0; }
-.drawer__panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 14px;
-  animation: pm-fade-up 0.5s 0.05s ease both;
-}
-
-.nav__section {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  padding: 8px 10px 4px;
-}
-.nav__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  font-size: 13.5px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.nav__item:hover { background: var(--accent-soft); color: var(--text); }
-.nav__item--on {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--on-accent);
-  box-shadow: 0 6px 16px -6px var(--accent-soft);
-}
-
-/* cycle stats */
-.cycle { margin-top: 6px; }
-.cycle__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 4px 8px; }
-.cycle__cell {
-  padding: 12px 10px;
-  border-radius: 11px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  text-align: center;
-}
-.cycle__value { font-size: 22px; font-weight: 300; color: var(--text); line-height: 1.1; }
-.cycle__label { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
-.cycle__status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 2px 10px 8px;
-}
-.cycle__dot { width: 7px; height: 7px; border-radius: 50%; }
-.cycle__reset {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 4px 0;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.cycle__reset:hover { background: var(--accent-soft); color: var(--text); }
-
-.drawer__spacer { flex: 1; }
-
-/* appearance quick settings */
-.quick { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--glass-border); }
-.quick__row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 6px; }
-.quick__label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
-
-/* segmented pill row (self-contained, no GSegmented dependency here) */
-.seg-row { display: inline-flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-.seg {
-  min-width: 30px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.seg:hover { color: var(--text); }
-.seg--on {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: var(--on-accent);
-}
-.seg--icon { display: grid; place-items: center; padding: 5px 8px; }
-
-/* drawer footer */
-.drawer__foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
-}
-.saved {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #5fd8a4;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-.saved.is-on { opacity: 1; }
 </style>
