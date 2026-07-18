@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A PocketMind application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"CompanyName": "PocketMind",
+			"FileDescription": "Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.",
+			"LegalCopyright": "(c) 2026, PocketMind",
+			"ProductName": "PocketMind",
+			"Comments": "Smart break reminder app for macOS"
 		}
 	}
 }

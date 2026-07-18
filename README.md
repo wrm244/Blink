@@ -1,59 +1,39 @@
-# Welcome to Your New Wails3 Project!
+# PocketMind
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+A macOS menu-bar app that reminds you to rest your eyes, modelled on [LookAway](https://lookaway.app) and the 20-20-20 rule: every 20 minutes, look at something ~20 feet away for 20 seconds.
 
-## Getting Started
+Built with [Wails v3](https://v3.wails.io) (Go + Vue 3 + TypeScript), [Tailwind CSS v4](https://tailwindcss.com) + [Reka UI](https://reka-ui.com) (shadcn-vue style components), and [vue-i18n](https://vue-i18n.intlify.dev) for Chinese / English.
 
-1. Navigate to your project directory in the terminal.
+## Features
 
-2. To run your application in development mode, use the following command:
+- **First-run onboarding**: the app opens to a setup screen and does **not** start counting down until you finish configuration and press "Start focusing".
+- **Menu-bar tray** with a live countdown of the time to your next break.
+- **Focus → pre-break warning → break** cycle, with frequent short breaks and occasional longer breaks.
+- **Break overlay** that gently blurs every screen (multi-monitor aware) and shows a ring countdown; a chime plays when the break ends.
+- **Pre-break notice** so you can wrap up your task before the screen dims.
+- **Idle-aware**: the focus timer pauses and resets when you've been away, so breaks only trigger while you're actually working. Survives system sleep.
+- **Global keyboard shortcuts** for start / skip / postpone / preferences.
+- **Fully configurable** via a modern settings UI (timing sliders, options, shortcuts, about) and persisted to `~/Library/Application Support/PocketMind/settings.json`.
+- **Bilingual UI** (简体中文 / English): defaults to the system language, switchable in settings; the native tray menu localises too.
 
-   ```
-   wails3 dev
-   ```
+## Getting started
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+```bash
+wails3 dev      # hot-reload development
+wails3 build    # production binary -> bin/pocketmind
+wails3 task package   # -> bin/pocketmind.app (codesign ad-hoc)
+```
 
-3. To build your application for production, use:
+On first launch the setup window appears. Pick a language and press **Start focusing** (or tweak timings first). The tray icon then shows a live countdown. Open the menu-bar item (or press `Cmd+Shift+,`) for Preferences, `Cmd+Shift+B` to take a break now.
 
-   ```
-   wails3 build
-   ```
+## Architecture
 
-   This will create a production-ready executable in the `build` directory.
+| Package | Responsibility |
+| --- | --- |
+| `internal/breakengine` | The timer state machine (phases, idle, sleep-reset, break windows, start/stop) |
+| `internal/config` | Settings struct + JSON persistence (incl. `onboarded`, `autoStart`, `language`) |
+| `internal/platform` | CGo: system idle time (`CGEventSource`) and `NSSound` chime on macOS; no-op stubs elsewhere |
+| `main.go` / `tray.go` / `shortcuts.go` / `prefs.go` / `breakservice.go` | App wiring: tray+menu (i18n), global shortcuts, preferences window, the Wails service the frontend calls (onboarding gate + engine controls) |
+| `frontend/src` | Vue 3 SPA - a hash router selects Settings / BreakOverlay / PreBreakNotice per window; shadcn-vue components in `components/ui`, locales in `locales/` |
 
-## Exploring Wails3 Features
-
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
-
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
-
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
-
-   ```
-   go run .
-   ```
-
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+> Note: conference/call detection and media-playback detection (LookAway's auto-pause features) are out of scope for this initial cut.

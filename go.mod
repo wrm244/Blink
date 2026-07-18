@@ -1,4 +1,4 @@
-module changeme
+module pocketmind
 
 go 1.25.0
 
