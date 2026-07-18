@@ -100,12 +100,20 @@
     padding: 0;
     height: 100%;
   }
+  html,
   body {
-    background: transparent;
+    /* Opaque themed background filling the whole viewport, so scrolling past
+       content never reveals a transparent/white overscroll area. The window
+       itself is now opaque (solid) too, which removes the Tahoe glass frame. */
+    background: var(--bg-from);
     color: var(--text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Lock the page itself: no rubber-band / elastic overscroll that would
+       expose the window background. Only inner scroll areas scroll. */
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   /* Themed, thin scrollbars. */

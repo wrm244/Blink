@@ -4,25 +4,24 @@ import "github.com/wailsapp/wails/v3/pkg/application"
 
 const prefsWindowName = "pm-prefs"
 
-// preferencesOptions describes the settings window: a translucent,
-// frameless-inset window centered on the primary display. The window carries
-// the macOS vibrancy (which follows the system appearance); the web page paints
-// a semi-opaque themed surface on top so text stays readable while keeping a
-// hint of native vibrancy.
+// preferencesOptions describes the settings window. It uses a solid opaque
+// background (not macOS translucency): a translucent window on Tahoe shows a
+// bright glass frame at the edges and an overscroll "white" when content is
+// scrolled past its end. The web page paints its own themed gradient on top of
+// the opaque surface.
 func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
 		Title:            "PocketMind",
-		Width:            900,
-		Height:           640,
+		Width:            920,
+		Height:           660,
 		MinWidth:         760,
 		MinHeight:        560,
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,
-		BackgroundType:   application.BackgroundTypeTranslucent,
-		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
+		BackgroundType:   application.BackgroundTypeSolid,
+		BackgroundColour: application.NewRGB(21, 23, 28),
 		Mac: application.MacWindow{
-			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 			InvisibleTitleBarHeight: 50,
 		},
