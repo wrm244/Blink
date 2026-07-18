@@ -131,12 +131,12 @@ func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
 		X:              s.Bounds.X,
 		Y:              s.Bounds.Y,
 		InitialPosition: application.WindowXY,
-		// Transparent so the translucent macOS backdrop (the blur) shows through;
-		// the web content paints a semi-opaque dim on top of it.
-		BackgroundType:   application.BackgroundTypeTransparent,
-		BackgroundColour:  application.NewRGBA(0, 0, 0, 0),
+		// Solid dark background: macOS Tahoe's translucent vibrancy renders a
+		// bright glassy frame at the window edges, so the break overlay uses an
+		// opaque solid surface instead - no frame, and a calmer rest screen.
+		BackgroundType:   application.BackgroundTypeSolid,
+		BackgroundColour:  application.NewRGB(10, 12, 18),
 		Mac: application.MacWindow{
-			Backdrop:           application.MacBackdropTranslucent,
 			WindowLevel:        application.MacWindowLevelStatus,
 			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorStationary,
 			TitleBar:            application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},

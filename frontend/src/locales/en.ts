@@ -37,6 +37,14 @@ export default {
     options: "Options",
     shortcuts: "Shortcuts",
     about: "About",
+    sectionGeneral: "General",
+    sectionCycle: "Break cycle",
+  },
+  stats: {
+    cycle: "Current cycle",
+    shortBreaksDone: "Short breaks done",
+    nextLong: "Until long break",
+    notRunning: "Not running",
   },
   timing: {
     title: "Timing",
