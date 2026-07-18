@@ -6,13 +6,23 @@ import { BreakService } from '../../bindings/blink'
 import { Phase } from '../../bindings/blink/internal/breakengine/models'
 import { ChevronRight } from 'lucide-vue-next'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+// ---- break engine state (countdown) ----
 const phase = ref<string>('')
 const remaining = ref(0)
 const total = ref(0)
 let off: (() => void) | undefined
 
+// ---- wall clock (current date + time, precise to the second) ----
+// `now` is refreshed at each whole-second boundary so the displayed seconds
+// never jump or stutter. We recompute the timeout to the next boundary on
+// every tick instead of a fixed 1 s interval, which would drift under load.
+const now = ref(new Date())
+let clockTimer: ReturnType<typeof setTimeout> | undefined
+
 onMounted(async () => {
+  // --- countdown ---
   const st = await BreakService.GetState()
   phase.value = st.phase
   remaining.value = st.remainingSec
@@ -22,8 +32,32 @@ onMounted(async () => {
     remaining.value = ev.data.remainingSec
     total.value = ev.data.totalSec
   })
+
+  // --- wall clock: align ticks to second boundaries ---
+  now.value = new Date()
+  scheduleClockTick()
 })
-onUnmounted(() => off?.())
+
+onUnmounted(() => {
+  off?.()
+  if (clockTimer !== undefined) clearTimeout(clockTimer)
+})
+
+/**
+ * Schedules the next wall-clock update at the start of the next second.
+ * Using setTimeout (re-scheduled each tick) instead of setInterval keeps
+ * the display pinned to real second boundaries — setInterval(1000) drifts
+ * because the callback can fire a few ms late and accumulate.
+ */
+function scheduleClockTick() {
+  const msToNextSecond = 1000 - (Date.now() % 1000)
+  clockTimer = setTimeout(() => {
+    now.value = new Date()
+    scheduleClockTick()
+  }, msToNextSecond)
+}
+
+// ---- derived values ----
 
 const isLong = computed(() => phase.value === Phase.PhaseLongBreak)
 const label = computed(() => (isLong.value ? t('break.longLabel') : t('break.shortLabel')))
@@ -38,11 +72,32 @@ const fraction = computed(() => {
   return Math.max(0, Math.min(1, 1 - remaining.value / total.value))
 })
 
+// Break countdown formatted as M:SS.
 const clock = computed(() => {
   const m = Math.floor(remaining.value / 60)
   const s = remaining.value % 60
   return `${m}:${String(s).padStart(2, '0')}`
 })
+
+/**
+ * Current date + time, localised and precise to the second.
+ * Intl.DateTimeFormat is used so the weekday/month names follow the active
+ * locale (zh-CN / en). hour12:false gives a 24-hour clock in both locales,
+ * which reads cleanly on a rest screen.
+ */
+const datetime = computed(() => {
+  const loc = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+  return new Intl.DateTimeFormat(loc, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(now.value)
+})
+
 function skip() { BreakService.SkipBreak() }
 </script>
 
@@ -51,8 +106,12 @@ function skip() { BreakService.SkipBreak() }
     <div class="vignette" aria-hidden="true" />
 
     <main class="content">
+      <!-- Current date + time: secondary context at the top, very muted. -->
+      <p class="datetime tabular-nums">{{ datetime }}</p>
+
       <p class="label">{{ label }}</p>
 
+      <!-- Break countdown: the hero element. -->
       <div class="clock tabular-nums">{{ clock }}</div>
 
       <div class="progress" aria-hidden="true">
@@ -72,11 +131,10 @@ function skip() { BreakService.SkipBreak() }
 <style scoped>
 /*
  * Break overlay — full-screen, top-priority rest screen.
- * The number is the hero: huge, thin, centered on a calm dark slate field.
- * No SVG ring (avoids any square viewport artifact), no ambient blobs, no
- * gradients on accents. A single thin progress line beneath the clock is the
- * only chromatic accent. Window is already AlwaysOnTop + Status level +
- * CanJoinAllSpaces (see windows.go), so it sits above everything system-wide.
+ * The break countdown is the hero; the wall clock sits above it as quiet
+ * context. No SVG ring (avoids any square viewport artifact), no ambient
+ * blobs, no gradients on accents. The window is created at ScreenSaver
+ * window level (see windows.go) so it covers the Dock and menu bar too.
  */
 .overlay {
   position: fixed;
@@ -111,6 +169,15 @@ function skip() { BreakService.SkipBreak() }
 @keyframes pm-rise {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Wall clock: smallest, faintest text — quiet context, not a focus point. */
+.datetime {
+  margin: 0 0 -12px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: rgba(232, 230, 225, 0.32);
 }
 
 .label {

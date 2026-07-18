@@ -147,11 +147,16 @@ func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
 		BackgroundType:   application.BackgroundTypeSolid,
 		BackgroundColour:  application.NewRGB(24, 26, 29),
 		Mac: application.MacWindow{
-			WindowLevel:        application.MacWindowLevelStatus,
-			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorStationary,
-			TitleBar:            application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
-			DisableShadow:       true,
-		},
+		// ScreenSaver is the highest NSWindow level (1000), above PopUpMenu
+		// (101), Status (25, where the Dock and menu bar live) and everything
+		// else. This guarantees the overlay covers the Dock and menu bar at all
+		// times — lower levels like Status compete with the Dock for z-order
+		// and intermittently lose, letting the Dock bleed through.
+		WindowLevel:        application.MacWindowLevelScreenSaver,
+		CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorStationary,
+		TitleBar:            application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
+		DisableShadow:       true,
+	},
 		CloseButtonState:      application.ButtonHidden,
 		MinimiseButtonState:   application.ButtonHidden,
 		MaximiseButtonState:   application.ButtonHidden,
