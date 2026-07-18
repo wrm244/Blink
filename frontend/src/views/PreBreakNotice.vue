@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/pocketmind'
+import { BreakService } from '../../bindings/blink'
 import GButton from '@/components/GButton.vue'
 
 const { t } = useI18n()
@@ -12,7 +12,7 @@ let off: (() => void) | undefined
 onMounted(async () => {
   const st = await BreakService.GetState()
   remaining.value = st.remainingSec
-  off = Events.On('pm:tick', (ev: { data: { remainingSec: number } }) => {
+  off = Events.On('blink:tick', (ev: { data: { remainingSec: number } }) => {
     remaining.value = ev.data.remainingSec
   })
 })

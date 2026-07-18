@@ -6,8 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"pocketmind/internal/breakengine"
-	"pocketmind/internal/config"
+	"blink/internal/breakengine"
+	"blink/internal/config"
 )
 
 // BreakService is the Go type whose methods the frontend calls through Wails
@@ -58,7 +58,7 @@ func (s *BreakService) SaveSettings(settings config.Settings) error {
 		registerAll(settings)
 		if settings.Language != "" {
 			if err := setMenuLanguage(settings.Language); err != nil {
-				log.Printf("pocketmind: set menu language: %v", err)
+				log.Printf("blink: set menu language: %v", err)
 			}
 		}
 	}()

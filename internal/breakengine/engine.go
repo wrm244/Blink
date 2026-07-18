@@ -1,5 +1,5 @@
 // Package breakengine contains the timer state machine at the heart of
-// PocketMind: it cycles through focus, pre-break warning and (short or long)
+// Blink: it cycles through focus, pre-break warning and (short or long)
 // break phases, pauses on user idle, survives system sleep, and drives the
 // on-screen break overlays.
 package breakengine
@@ -10,12 +10,12 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"pocketmind/internal/config"
-	"pocketmind/internal/platform"
+	"blink/internal/config"
+	"blink/internal/platform"
 )
 
 const (
-	eventTick = "pm:tick"
+	eventTick = "blink:tick"
 
 	// Built-in macOS system sounds: a soft chime when a break ends and a
 	// gentle tick when the pre-break warning appears.

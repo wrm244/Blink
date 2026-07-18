@@ -6,7 +6,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"pocketmind/internal/breakengine"
+	"blink/internal/breakengine"
 )
 
 var (
@@ -34,7 +34,7 @@ var trayStrings = map[string]map[string]string{
 		"startFocus":  "开始专注",
 		"reset":       "重置周期",
 		"preferences": "设置…",
-		"quit":        "退出 PocketMind",
+		"quit":        "退出 Blink",
 	},
 	"en": {
 		"takeBreak":   "Take a break now",
@@ -44,7 +44,7 @@ var trayStrings = map[string]map[string]string{
 		"startFocus":  "Start focusing",
 		"reset":       "Reset cycle",
 		"preferences": "Preferences…",
-		"quit":        "Quit PocketMind",
+		"quit":        "Quit Blink",
 	},
 }
 
@@ -62,7 +62,7 @@ func buildTray() {
 	menu := application.NewMenu()
 
 	// A disabled first item that doubles as a live status read-out.
-	statusItem = menu.Add("PocketMind")
+	statusItem = menu.Add("Blink")
 	statusItem.SetEnabled(false)
 
 	menu.AddSeparator()
@@ -87,8 +87,8 @@ func buildTray() {
 	menuItemQuit.OnClick(func(*application.Context) { app.Quit() })
 
 	tray = app.SystemTray.New()
-	tray.SetLabel("PocketMind")
-	tray.SetTooltip("PocketMind")
+	tray.SetLabel("Blink")
+	tray.SetTooltip("Blink")
 	tray.SetMenu(menu)
 }
 
@@ -140,18 +140,18 @@ func formatStatus(st breakengine.State) (label, tooltip string) {
 	rem := time.Duration(st.RemainingSec) * time.Second
 	switch st.Phase {
 	case breakengine.PhaseFocusing, breakengine.PhasePreBreak:
-		return fmtDuration(rem), "PocketMind · " + trStatus(st, rem)
+		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
 	case breakengine.PhaseShortBreak:
-		return fmtDuration(rem), "PocketMind · " + trStatus(st, rem)
+		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
 	case breakengine.PhaseLongBreak:
-		return fmtDuration(rem), "PocketMind · " + trStatus(st, rem)
+		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
 	case breakengine.PhasePaused:
-		return "⏸", "PocketMind · " + tr("pauseResume")
+		return "⏸", "Blink · " + tr("pauseResume")
 	case breakengine.PhaseIdle:
-		return "⏸", "PocketMind · " + tr("pauseResume")
+		return "⏸", "Blink · " + tr("pauseResume")
 	default:
 		// Engine not running (e.g. before onboarding).
-		return "PocketMind", "PocketMind"
+		return "Blink", "Blink"
 	}
 }
 

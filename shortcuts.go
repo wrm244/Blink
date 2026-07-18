@@ -4,7 +4,7 @@ import (
 	"log"
 	"sync"
 
-	"pocketmind/internal/config"
+	"blink/internal/config"
 )
 
 // rebindMu serialises shortcut re-registration so a flurry of settings saves
@@ -29,7 +29,7 @@ func registerAll(s config.Settings) {
 			return
 		}
 		if err := app.GlobalShortcut.Register(acc, fn); err != nil {
-			log.Printf("pocketmind: shortcut %q not registered: %v", acc, err)
+			log.Printf("blink: shortcut %q not registered: %v", acc, err)
 		}
 	}
 	bind(s.ShortcutStartBreak, func() { engine.StartBreakNow() })

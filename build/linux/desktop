@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=PocketMind
+Name=Blink
 Comment=Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/pocketmind %u
+Exec=/usr/local/bin/blink %u
 Terminal=false
 Type=Application
-Icon=pocketmind
+Icon=blink
 Categories=Utility;
-StartupWMClass=pocketmind
+StartupWMClass=blink
 
  

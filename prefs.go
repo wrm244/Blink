@@ -12,7 +12,7 @@ const prefsWindowName = "pm-prefs"
 func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
-		Title:            "PocketMind",
+		Title:            "Blink",
 		Width:            920,
 		Height:           660,
 		// Min size matches the default size so the window opens fixed and

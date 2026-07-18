@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/pocketmind'
-import { Phase } from '../../bindings/pocketmind/internal/breakengine/models'
+import { BreakService } from '../../bindings/blink'
+import { Phase } from '../../bindings/blink/internal/breakengine/models'
 import { ChevronRight } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -17,7 +17,7 @@ onMounted(async () => {
   phase.value = st.phase
   remaining.value = st.remainingSec
   total.value = st.totalSec
-  off = Events.On('pm:tick', (ev: { data: { phase: string; remainingSec: number; totalSec: number } }) => {
+  off = Events.On('blink:tick', (ev: { data: { phase: string; remainingSec: number; totalSec: number } }) => {
     phase.value = ev.data.phase
     remaining.value = ev.data.remainingSec
     total.value = ev.data.totalSec

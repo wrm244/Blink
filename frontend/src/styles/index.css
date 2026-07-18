@@ -3,7 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * PocketMind - Slate design system.
+ * Blink - Slate design system.
  * Single neutral slate accent, no gradients. Semantic phase colors are
  * desaturated so the UI reads as calm and sturdy rather than playful.
  * Each view paints its own solid backdrop; panels sit on top with a

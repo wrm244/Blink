@@ -9,9 +9,9 @@ import { Events } from '@wailsio/runtime'
 import { Bell, Check, Clock, Coffee, Eye, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Settings as Settings2, Sparkles, Sun, Timer } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/pocketmind'
-import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
-import type { Settings } from '../../bindings/pocketmind/internal/config/models'
+import { BreakService } from '../../bindings/blink'
+import type { State } from '../../bindings/blink/internal/breakengine/models'
+import type { Settings } from '../../bindings/blink/internal/config/models'
 
 const { t, locale } = useI18n()
 
@@ -35,7 +35,7 @@ onMounted(async () => {
     locale.value = s.language
   }
   state.value = await BreakService.GetState()
-  off = Events.On('pm:tick', (ev: { data: State }) => { state.value = ev.data })
+  off = Events.On('blink:tick', (ev: { data: State }) => { state.value = ev.data })
 })
 onUnmounted(() => off?.())
 

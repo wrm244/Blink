@@ -1,4 +1,4 @@
-// Package config holds the user-configurable settings for PocketMind and
+// Package config holds the user-configurable settings for Blink and
 // persists them as JSON in the per-user application-support directory.
 package config
 
@@ -119,7 +119,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "PocketMind", "settings.json"), nil
+	return filepath.Join(base, "Blink", "settings.json"), nil
 }
 
 // Load reads the settings from disk, falling back to defaults (and creating

@@ -1,4 +1,4 @@
-module pocketmind
+module blink
 
 go 1.25.0
 

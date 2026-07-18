@@ -6,8 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"pocketmind/internal/breakengine"
-	"pocketmind/internal/config"
+	"blink/internal/breakengine"
+	"blink/internal/config"
 )
 
 // Wails uses Go's embed package to ship the frontend build inside the binary.
@@ -22,13 +22,13 @@ var (
 
 func init() {
 	// Registering the event gives the frontend a typed JS/TS API for it.
-	application.RegisterEvent[breakengine.State]("pm:tick")
+	application.RegisterEvent[breakengine.State]("blink:tick")
 }
 
 func main() {
 	settings, err := config.Load()
 	if err != nil {
-		log.Printf("pocketmind: could not load settings, using defaults: %v", err)
+		log.Printf("blink: could not load settings, using defaults: %v", err)
 		settings = config.Default()
 	}
 
@@ -40,7 +40,7 @@ func main() {
 	engine = breakengine.New(settings)
 
 	app = application.New(application.Options{
-		Name:        "PocketMind",
+		Name:        "Blink",
 		Description: "Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.",
 		Services: []application.Service{
 			application.NewService(NewBreakService(engine)),

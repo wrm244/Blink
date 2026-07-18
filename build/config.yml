@@ -5,11 +5,11 @@ version: '3'
 
 # This information is used to generate the build assets.
 info:
-  companyName: "PocketMind" # The name of the company
-  productName: "PocketMind" # The name of the application
-  productIdentifier: "com.pocketmind.app" # The unique product identifier
+  companyName: "Blink" # The name of the company
+  productName: "Blink" # The name of the application
+  productIdentifier: "com.blink.app" # The unique product identifier
   description: "Smart break reminders to ease eye strain, modelled on the 20-20-20 rule." # The application description
-  copyright: "(c) 2026, PocketMind" # Copyright text
+  copyright: "(c) 2026, Blink" # Copyright text
   comments: "Smart break reminder app for macOS" # Comments
   version: "0.1.0" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)

@@ -1,6 +1,6 @@
 export default {
   app: {
-    name: "PocketMind",
+    name: "Blink",
     tagline: "智能休息提醒，缓解眼部疲劳",
   },
   status: {
@@ -25,8 +25,8 @@ export default {
     breakCount: "已完成 {n} 次休息",
   },
   onboarding: {
-    welcome: "欢迎使用 PocketMind",
-    intro: "PocketMind 会根据 20-20-20 规则提醒你休息，缓解长时间用屏带来的眼部疲劳。",
+    welcome: "欢迎使用 Blink",
+    intro: "Blink 会根据 20-20-20 规则提醒你休息，缓解长时间用屏带来的眼部疲劳。",
     intro2: "先完成简单配置，然后开始你的第一个专注周期。",
     language: "语言",
     startButton: "开始专注",
@@ -126,7 +126,7 @@ export default {
     applyPreset: "应用预设",
   },
   tray: {
-    status: "PocketMind",
+    status: "Blink",
     takeBreak: "立即开始休息",
     skipBreak: "跳过休息",
     postponeBreak: "推迟休息",
@@ -134,11 +134,11 @@ export default {
     startFocus: "开始专注",
     resetCycle: "重置周期",
     preferences: "设置…",
-    quit: "退出 PocketMind",
+    quit: "退出 Blink",
   },
   about: {
     version: "版本",
-    description: "PocketMind 是一款基于 20-20-20 规则的智能休息提醒应用，帮助你缓解眼部疲劳、提升工作效率。",
+    description: "Blink 是一款基于 20-20-20 规则的智能休息提醒应用，帮助你缓解眼部疲劳、提升工作效率。",
     rule: "20-20-20 规则",
     ruleDesc: "每 20 分钟，看向 20 英尺（约 6 米）外的东西 20 秒。",
   },

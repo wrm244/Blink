@@ -5,10 +5,10 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "PocketMind",
+			"CompanyName": "Blink",
 			"FileDescription": "Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.",
-			"LegalCopyright": "(c) 2026, PocketMind",
-			"ProductName": "PocketMind",
+			"LegalCopyright": "(c) 2026, Blink",
+			"ProductName": "Blink",
 			"Comments": "Smart break reminder app for macOS"
 		}
 	}

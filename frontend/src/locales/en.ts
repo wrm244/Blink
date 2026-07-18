@@ -1,6 +1,6 @@
 export default {
   app: {
-    name: "PocketMind",
+    name: "Blink",
     tagline: "Smart break reminders to ease eye strain",
   },
   status: {
@@ -25,8 +25,8 @@ export default {
     breakCount: "{n} breaks done",
   },
   onboarding: {
-    welcome: "Welcome to PocketMind",
-    intro: "PocketMind reminds you to rest your eyes on the 20-20-20 rule, easing fatigue from long screen sessions.",
+    welcome: "Welcome to Blink",
+    intro: "Blink reminds you to rest your eyes on the 20-20-20 rule, easing fatigue from long screen sessions.",
     intro2: "Finish a quick setup, then start your first focus cycle.",
     language: "Language",
     startButton: "Start focusing",
@@ -126,7 +126,7 @@ export default {
     applyPreset: "Apply preset",
   },
   tray: {
-    status: "PocketMind",
+    status: "Blink",
     takeBreak: "Take a break now",
     skipBreak: "Skip break",
     postponeBreak: "Postpone break",
@@ -134,11 +134,11 @@ export default {
     startFocus: "Start focusing",
     resetCycle: "Reset cycle",
     preferences: "Preferences…",
-    quit: "Quit PocketMind",
+    quit: "Quit Blink",
   },
   about: {
     version: "Version",
-    description: "PocketMind is a smart break-reminder app based on the 20-20-20 rule, helping you ease eye strain and stay productive.",
+    description: "Blink is a smart break-reminder app based on the 20-20-20 rule, helping you ease eye strain and stay productive.",
     rule: "The 20-20-20 rule",
     ruleDesc: "Every 20 minutes, look at something 20 feet away for 20 seconds.",
   },

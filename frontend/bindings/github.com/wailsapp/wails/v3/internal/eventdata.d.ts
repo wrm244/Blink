@@ -7,12 +7,12 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import type * as breakengine$0 from "../../../../../pocketmind/internal/breakengine/models.js";
+import type * as breakengine$0 from "../../../../../blink/internal/breakengine/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
-            "pm:tick": breakengine$0.State;
+            "blink:tick": breakengine$0.State;
         }
     }
 }
