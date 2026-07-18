@@ -13,9 +13,9 @@ func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
 		Title:            "PocketMind",
-		Width:            520,
-		Height:           680,
-		MinWidth:         460,
+		Width:            900,
+		Height:           640,
+		MinWidth:         760,
 		MinHeight:        560,
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,

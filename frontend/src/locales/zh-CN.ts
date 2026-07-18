@@ -37,6 +37,14 @@ export default {
     options: "选项",
     shortcuts: "快捷键",
     about: "关于",
+    sectionGeneral: "通用",
+    sectionCycle: "休息周期",
+  },
+  stats: {
+    cycle: "当前周期",
+    shortBreaksDone: "已完成短休息",
+    nextLong: "距下次长休息",
+    notRunning: "未运行",
   },
   timing: {
     title: "时间设置",

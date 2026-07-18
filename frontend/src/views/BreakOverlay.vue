@@ -4,8 +4,7 @@ import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import { Phase } from '../../bindings/pocketmind/internal/breakengine/models'
-import { SkipForward } from 'lucide-vue-next'
-import GButton from '@/components/GButton.vue'
+import { ChevronRight } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const phase = ref<string>('')
@@ -29,12 +28,17 @@ onUnmounted(() => off?.())
 const isLong = computed(() => phase.value === Phase.PhaseLongBreak)
 const label = computed(() => (isLong.value ? t('break.longLabel') : t('break.shortLabel')))
 
+// Long breaks use a calmer teal/green accent; short breaks use the blue focus accent.
+const accent = computed(() => (isLong.value
+  ? { from: '#5fd8a4', to: '#4fc8c8', glow: 'rgba(95,216,164,0.22)', ring: 'rgba(95,216,164,0.7)' }
+  : { from: '#6b8dff', to: '#b89cff', glow: 'rgba(107,141,255,0.2)', ring: 'rgba(107,141,255,0.65)' }))
+
 // Ring: fraction elapsed grows as the break advances.
 const fraction = computed(() => {
   if (total.value <= 0) return 0
   return Math.max(0, Math.min(1, 1 - remaining.value / total.value))
 })
-const R = 150
+const R = 146
 const CIRC = 2 * Math.PI * R
 const dashOffset = computed(() => CIRC * (1 - fraction.value))
 
@@ -47,18 +51,21 @@ function skip() { BreakService.SkipBreak() }
 </script>
 
 <template>
-  <div class="overlay">
-    <div class="glow" aria-hidden="true" />
-    <div class="glow glow--2" aria-hidden="true" />
+  <div class="overlay" :style="{ '--a-from': accent.from, '--a-to': accent.to, '--a-glow': accent.glow, '--a-ring': accent.ring }">
+    <!-- Ambient depth: layered soft glows -->
+    <div class="amb amb-a" aria-hidden="true" />
+    <div class="amb amb-b" aria-hidden="true" />
+    <div class="vignette" aria-hidden="true" />
+
     <main class="content">
       <p class="label">{{ label }}</p>
 
       <div class="ring-wrap">
         <svg class="ring" viewBox="0 0 340 340">
           <defs>
-            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#6b8dff" />
-              <stop offset="100%" stop-color="#9b7dff" />
+            <linearGradient :id="'g'" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" :stop-color="accent.from" />
+              <stop offset="100%" :stop-color="accent.to" />
             </linearGradient>
           </defs>
           <circle class="ring-track" cx="170" cy="170" :r="R" />
@@ -67,20 +74,23 @@ function skip() { BreakService.SkipBreak() }
             cx="170" cy="170" :r="R"
             :stroke-dasharray="CIRC"
             :stroke-dashoffset="dashOffset"
-            stroke="url(#ringGrad)"
+            :stroke="`url(#g)`"
           />
         </svg>
         <div class="clock-wrap">
           <div class="clock tabular-nums">{{ clock }}</div>
-          <div class="breathe" aria-hidden="true" />
+          <div class="breathe" aria-hidden="true">
+            <span class="breathe__dot" />
+          </div>
         </div>
       </div>
 
       <p class="hint">{{ t('break.hint') }}</p>
-      <GButton variant="glass" size="lg" @click="skip">
-        <SkipForward class="size-4" />
-        {{ t('break.skip') }}
-      </GButton>
+
+      <button class="skip" @click="skip">
+        <span>{{ t('break.skip') }}</span>
+        <ChevronRight class="size-4" />
+      </button>
     </main>
   </div>
 </template>
@@ -92,49 +102,76 @@ function skip() { BreakService.SkipBreak() }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 40%, #1a1d28 0%, #0c0e14 100%);
-  color: #f0f2f6;
+  background: linear-gradient(160deg, #0d1018 0%, #14171f 48%, #0a0c12 100%);
+  color: #eef1f6;
   user-select: none;
   overflow: hidden;
 }
-.glow {
+
+/* Ambient glows for depth */
+.amb {
   position: absolute;
-  width: 70vmin;
-  height: 70vmin;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(107, 141, 255, 0.2), transparent 70%);
-  filter: blur(60px);
+  filter: blur(90px);
+  pointer-events: none;
+}
+.amb-a {
+  width: 62vmin;
+  height: 62vmin;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -52%);
+  background: radial-gradient(circle, var(--a-glow), transparent 68%);
+  animation: pm-drift 14s ease-in-out infinite alternate;
 }
-.glow--2 {
-  width: 50vmin;
-  height: 50vmin;
-  background: radial-gradient(circle, rgba(155, 125, 255, 0.14), transparent 70%);
-  transform: translate(-30%, -60%);
+.amb-b {
+  width: 44vmin;
+  height: 44vmin;
+  top: 50%;
+  left: 50%;
+  transform: translate(-32%, -64%);
+  background: radial-gradient(circle, rgba(184, 156, 255, 0.1), transparent 70%);
+  animation: pm-drift 18s ease-in-out infinite alternate-reverse;
 }
+@keyframes pm-drift {
+  from { transform: translate(-50%, -52%) scale(1); opacity: 0.9; }
+  to   { transform: translate(-46%, -56%) scale(1.08); opacity: 1; }
+}
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+  pointer-events: none;
+}
+
 .content {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 26px;
+  gap: 30px;
   text-align: center;
-  animation: pm-scale-in 0.6s ease both;
+  animation: pm-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+@keyframes pm-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .label {
   margin: 0;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: rgba(240, 242, 246, 0.55);
+  color: rgba(238, 241, 246, 0.5);
+  padding-left: 0.34em; /* offset for letter-spacing visual centering */
 }
+
 .ring-wrap {
   position: relative;
-  width: 320px;
-  height: 320px;
+  width: 300px;
+  height: 300px;
   display: grid;
   place-items: center;
 }
@@ -147,41 +184,83 @@ function skip() { BreakService.SkipBreak() }
 }
 .ring-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.07);
-  stroke-width: 5;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 3;
 }
 .ring-progress {
   fill: none;
-  stroke-width: 6;
+  stroke-width: 4;
   stroke-linecap: round;
   transition: stroke-dashoffset 1s linear;
-  filter: drop-shadow(0 0 10px rgba(107, 141, 255, 0.6));
+  filter: drop-shadow(0 0 8px var(--a-ring));
 }
+
 .clock-wrap {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
 }
 .clock {
-  font-size: clamp(64px, 13vmin, 104px);
-  font-weight: 250;
+  font-size: clamp(56px, 11vmin, 92px);
+  font-weight: 200;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
 }
+
+/* Breathing guide: a dot that expands/contracts on a ~4s breath cycle */
 .breathe {
-  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+.breathe__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(107, 141, 255, 0.8);
-  bottom: -28px;
-  animation: pm-breathe 2.4s ease-in-out infinite;
+  background: var(--a-from);
+  box-shadow: 0 0 12px var(--a-ring);
+  animation: pm-breath 4s ease-in-out infinite;
 }
+@keyframes pm-breath {
+  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+  50%      { transform: scale(1.5); opacity: 1; }
+}
+
 .hint {
   margin: 0;
-  max-width: 34ch;
-  font-size: 15px;
-  color: rgba(240, 242, 246, 0.45);
+  max-width: 32ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(238, 241, 246, 0.42);
 }
+
+/* Refined glass skip button */
+.skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px 9px 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: rgba(238, 241, 246, 0.78);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.skip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(238, 241, 246, 0.95);
+}
+.skip :deep(svg) { transition: transform 0.2s ease; }
+.skip:hover :deep(svg) { transform: translateX(2px); }
 </style>
