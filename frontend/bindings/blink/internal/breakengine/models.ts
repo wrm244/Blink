@@ -32,13 +32,14 @@ export enum Phase {
     PhaseLongBreak = "longbreak",
 
     /**
-     * PhasePaused: the user paused the engine; the countdown is frozen.
-     */
-    PhasePaused = "paused",
-
-    /**
      * PhaseIdle: the user has been inactive past the idle threshold; the focus
      * timer is held and will reset when activity resumes.
+     * 
+     * Note: there is no PhasePaused constant. Pause() freezes the countdown by
+     * setting the live boolean e.paused without changing the phase, so the
+     * phase value during a user-pause is whatever it was when Pause was called
+     * (typically PhaseFocusing). The frontend reads the `paused` boolean in
+     * the emitted State, not the phase string, to detect pause.
      */
     PhaseIdle = "idle",
 };

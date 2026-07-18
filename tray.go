@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -10,18 +11,33 @@ import (
 )
 
 var (
-	tray       *application.SystemTray
-	statusItem *application.MenuItem
-	menuItemTakeBreak    *application.MenuItem
-	menuItemSkip         *application.MenuItem
-	menuItemPostpone     *application.MenuItem
-	menuItemPauseResume  *application.MenuItem
-	menuItemStart        *application.MenuItem
-	menuItemReset        *application.MenuItem
-	menuItemPreferences  *application.MenuItem
-	menuItemQuit         *application.MenuItem
-	menuLang             = "zh-CN"
+	tray                *application.SystemTray
+	statusItem          *application.MenuItem
+	menuItemTakeBreak   *application.MenuItem
+	menuItemSkip        *application.MenuItem
+	menuItemPostpone    *application.MenuItem
+	menuItemPauseResume *application.MenuItem
+	menuItemStart       *application.MenuItem
+	menuItemReset       *application.MenuItem
+	menuItemPreferences *application.MenuItem
+	menuItemQuit        *application.MenuItem
+	// menuLang holds the active tray-menu locale. It is read by trayStatusLoop
+	// (and the menu click handlers, which run on the main thread) and written
+	// by setMenuLanguage, which SaveSettings dispatches on a goroutine. We use
+	// atomic.Value rather than a bare string so the race detector stays quiet
+	// and the read in trayStatusLoop never sees a half-written value.
+	menuLang atomic.Value
 )
+
+func init() {
+	menuLang.Store("zh-CN")
+}
+
+// menuLangString loads the current menu locale as a plain string. Used by the
+// tray helpers below so they can stay simple.
+func menuLangString() string {
+	return menuLang.Load().(string)
+}
 
 // Tray menu strings per locale. Kept in Go because the menu is built natively
 // on the macOS side, not in the webview.
@@ -49,7 +65,7 @@ var trayStrings = map[string]map[string]string{
 }
 
 func tr(key string) string {
-	if m, ok := trayStrings[menuLang]; ok {
+	if m, ok := trayStrings[menuLangString()]; ok {
 		if v, ok := m[key]; ok {
 			return v
 		}
@@ -94,7 +110,7 @@ func buildTray() {
 
 // setMenuLanguage rebuilds the tray menu item labels for the given locale.
 func setMenuLanguage(lang string) error {
-	menuLang = lang
+	menuLang.Store(lang)
 	if menuItemTakeBreak != nil {
 		menuItemTakeBreak.SetLabel(tr("takeBreak"))
 		menuItemSkip.SetLabel(tr("skip"))
@@ -116,16 +132,26 @@ func togglePause() {
 	}
 }
 
-// trayStatusLoop updates the status item label, tray label and tooltip once a
-// second. It reads the engine state via the thread-safe GetState (which takes
-// and releases the engine mutex) and only then performs the main-thread window
-// calls, so it never holds the mutex across a main-thread wait.
+// trayStatusLoop updates the status item label, tray label and tooltip when the
+// rendered text changes. The engine emits a tick event every second while
+// counting down, but the formatted label only changes when the remaining time
+// crosses a whole second - which is every second during focus/break, but never
+// during pause/idle. By caching the last strings we skip the main-thread
+// SetLabel/SetTooltip calls (each of which triggers a native redraw) when the
+// text is identical, eliminating pointless UI work during the paused and idle
+// phases. The 2s cadence is enough for a status read-out: the per-second tick
+// event from the engine still drives the webview UI at full resolution.
 func trayStatusLoop() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+	var lastLabel, lastTooltip string
 	for range ticker.C {
 		st := engine.GetState()
 		label, tooltip := formatStatus(st)
+		if label == lastLabel && tooltip == lastTooltip {
+			continue
+		}
+		lastLabel, lastTooltip = label, tooltip
 		if tray != nil {
 			tray.SetLabel(label)
 			tray.SetTooltip(tooltip)
@@ -139,14 +165,9 @@ func trayStatusLoop() {
 func formatStatus(st breakengine.State) (label, tooltip string) {
 	rem := time.Duration(st.RemainingSec) * time.Second
 	switch st.Phase {
-	case breakengine.PhaseFocusing, breakengine.PhasePreBreak:
+	case breakengine.PhaseFocusing, breakengine.PhasePreBreak,
+		breakengine.PhaseShortBreak, breakengine.PhaseLongBreak:
 		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
-	case breakengine.PhaseShortBreak:
-		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
-	case breakengine.PhaseLongBreak:
-		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
-	case breakengine.PhasePaused:
-		return "⏸", "Blink · " + tr("pauseResume")
 	case breakengine.PhaseIdle:
 		return "⏸", "Blink · " + tr("pauseResume")
 	default:
@@ -175,21 +196,21 @@ func trStatus(st breakengine.State, rem time.Duration) string {
 // outside the webview i18n, the strings live here.
 var statusStrings = map[string]map[string]string{
 	"zh-CN": {
-		"focusing":  "专注中，距下次休息 %s",
-		"prebreak":  "%s 后开始休息",
+		"focusing":   "专注中，距下次休息 %s",
+		"prebreak":   "%s 后开始休息",
 		"shortbreak": "短休息，剩余 %s",
-		"longbreak": "长休息，剩余 %s",
+		"longbreak":  "长休息，剩余 %s",
 	},
 	"en": {
-		"focusing":  "focusing, next break in %s",
-		"prebreak":  "break in %s",
+		"focusing":   "focusing, next break in %s",
+		"prebreak":   "break in %s",
 		"shortbreak": "short break, %s remaining",
-		"longbreak": "long break, %s remaining",
+		"longbreak":  "long break, %s remaining",
 	},
 }
 
 func sfmt(phase string, rem time.Duration) string {
-	if m, ok := statusStrings[menuLang]; ok {
+	if m, ok := statusStrings[menuLangString()]; ok {
 		if tpl, ok := m[phase]; ok {
 			return fmt.Sprintf(tpl, fmtDuration(rem))
 		}

@@ -34,7 +34,7 @@ func main() {
 
 	// Seed the tray menu locale from saved settings before the menu is built.
 	if settings.Language == "zh-CN" || settings.Language == "en" {
-		menuLang = settings.Language
+		menuLang.Store(settings.Language)
 	}
 
 	engine = breakengine.New(settings)

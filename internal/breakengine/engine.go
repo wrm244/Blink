@@ -130,7 +130,10 @@ func (e *Engine) state() State {
 	}
 	total := e.total
 	remaining := total
-	if !e.phaseEnd.IsZero() {
+	// Idle and paused phases freeze the countdown: skip the phaseEnd lookup so
+	// remaining stays at total without the per-second phaseEnd rewrite the
+	// tick loop used to do.
+	if !e.phaseEnd.IsZero() && e.phase != PhaseIdle {
 		remaining = time.Until(e.phaseEnd)
 	}
 	if e.paused {
@@ -230,9 +233,9 @@ func (e *Engine) tick(now time.Time) {
 	if e.paused {
 		// Keep lastTick fresh while paused so a long pause does not look like
 		// system sleep on the next active tick (which would reset the focus
-		// period and silently drop the user's Resume).
+		// period and silently drop the user's Resume). No emit: the state is
+		// frozen (Pause/Resume emit on the actual transition).
 		e.lastTick = now
-		e.emit()
 		return
 	}
 
@@ -253,11 +256,8 @@ func (e *Engine) tick(now time.Time) {
 	// Idle handling only affects the focus period: while the user is away the
 	// focus countdown is held at full so they get a fresh period on return.
 	// idleLoop transitions focus -> PhaseIdle when the idle threshold is hit,
-	// so this is the branch that actually fires; the previous check against
-	// PhaseFocusing was dead code (phase was already PhaseIdle by then).
+	// and emits on the transition, so there is nothing to do here each second.
 	if e.phase == PhaseIdle {
-		e.phaseEnd = now.Add(e.focusDur())
-		e.emit()
 		return
 	}
 
@@ -327,9 +327,9 @@ func (e *Engine) idleLoop() {
 				e.idle = true
 				// Only idle-pause the focus workflow; never interrupt a break,
 				// and leave an explicit user pause alone. The check is against
-				// e.paused (the live boolean) rather than PhasePaused because
+				// e.paused (the live boolean) rather than a phase value because
 				// Pause() freezes the countdown in place without changing the
-				// phase, so PhasePaused is never observed here.
+				// phase, so a paused engine still reports PhaseFocusing here.
 				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
 					e.phase = PhaseIdle
 					e.hideNotice()
@@ -371,9 +371,13 @@ func (e *Engine) ApplySettings(s config.Settings) {
 	e.mu.Lock()
 	e.settings = s
 	if !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak) {
+		// startFocus emits on its own; no extra emit needed here.
 		e.startFocus(time.Now())
+	} else {
+		// Break in progress or user paused: just notify the frontend that
+		// settings (e.g. BreaksUntilLong) may have changed.
+		e.emit()
 	}
-	e.emit()
 	e.mu.Unlock()
 }
 
