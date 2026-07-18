@@ -40,6 +40,8 @@ type Settings struct {
 	Onboarded bool `json:"onboarded"`
 	// Language is the UI locale, "zh-CN" or "en" (empty = follow system).
 	Language string `json:"language"`
+	// Theme is the UI colour scheme: "system" (follow OS), "light", or "dark".
+	Theme string `json:"theme"`
 
 	// Global keyboard shortcuts (Wails accelerator syntax, e.g. "Cmd+Shift+B").
 	ShortcutStartBreak    string `json:"shortcutStartBreak"`
@@ -64,6 +66,7 @@ func Default() Settings {
 		AutoStart:             true,
 		Onboarded:             false,
 		Language:              "",
+		Theme:                 "system",
 		ShortcutStartBreak:    "Cmd+Shift+B",
 		ShortcutSkipBreak:     "Cmd+Shift+S",
 		ShortcutPostponeBreak: "Cmd+Shift+P",

@@ -49,12 +49,12 @@ function postpone() { BreakService.PostponeBreak() }
   height: 100%;
   padding: 0 18px;
   box-sizing: border-box;
-  background: linear-gradient(180deg, oklch(0.21 0.013 264), oklch(0.18 0.012 264));
+  background: var(--card);
   border-radius: 16px;
-  color: #f4f6fb;
+  color: var(--card-foreground);
   user-select: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 .dot {
   width: 9px;
@@ -80,7 +80,7 @@ function postpone() { BreakService.PostponeBreak() }
 }
 .sub {
   font-size: 11.5px;
-  color: rgba(244, 246, 251, 0.5);
+  color: var(--muted-foreground);
   margin-top: 2px;
 }
 </style>

@@ -53,6 +53,11 @@ export default {
     soundDesc: "用柔和的提示音提醒你回到专注状态。",
     autoStart: "启动时自动开始",
     autoStartDesc: "应用启动后立即进入专注计时。",
+    theme: "外观",
+    themeDesc: "选择浅色、深色或跟随系统。",
+    themeLight: "浅色",
+    themeDark: "深色",
+    themeSystem: "跟随系统",
   },
   shortcuts: {
     title: "快捷键",

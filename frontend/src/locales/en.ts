@@ -53,6 +53,11 @@ export default {
     soundDesc: "A soft tone to bring you back to focus.",
     autoStart: "Auto-start on launch",
     autoStartDesc: "Begin the focus timer as soon as the app starts.",
+    theme: "Appearance",
+    themeDesc: "Choose light, dark, or follow the system.",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeSystem: "System",
   },
   shortcuts: {
     title: "Shortcuts",

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/pocketmind'
 import type { Settings } from '../../bindings/pocketmind/internal/config/models'
 import type { State } from '../../bindings/pocketmind/internal/breakengine/models'
-import { Eye, Play, Pause, SkipForward, Clock, RotateCcw, Bell, Languages, Check } from 'lucide-vue-next'
+import { Eye, Play, Pause, Clock, Bell, Languages, Check, Sun, Moon, Monitor } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { setLocale, type Locale } from '@/i18n'
+import { applyTheme, type Theme } from '@/theme'
 
 const { t, locale } = useI18n()
 
@@ -27,6 +28,12 @@ let off: (() => void) | undefined
 
 onMounted(async () => {
   Object.assign(s, await BreakService.GetSettings())
+  // Apply the persisted theme + locale from settings.
+  applyTheme((s.theme as Theme) || 'system')
+  if (s.language === 'zh-CN' || s.language === 'en') {
+    setLocale(s.language)
+    locale.value = s.language
+  }
   state.value = await BreakService.GetState()
   off = Events.On('pm:tick', (ev: { data: State }) => {
     state.value = ev.data
@@ -35,18 +42,24 @@ onMounted(async () => {
 onUnmounted(() => off?.())
 
 const onboarded = computed(() => s.onboarded === true)
-const engineRunning = computed(() => state.value.phase !== 'paused' && state.value.phase !== '')
+// "Paused" covers both an explicit user pause and the idle (inactivity) pause.
+const isPaused = computed(() => state.value.paused || state.value.phase === 'idle')
 
 function touch() {
   dirty.value = true
   saved.value = false
 }
 
-// Language is applied live and persisted locally; persisted to the backend on
-// Save so the tray menu can be localised too.
 function changeLanguage(v: string) {
   setLocale(v as Locale)
   locale.value = v
+  s.language = v
+  touch()
+}
+
+function changeTheme(v: string) {
+  s.theme = v
+  applyTheme(v as Theme)
   touch()
 }
 
@@ -57,7 +70,6 @@ async function save() {
 }
 
 async function completeOnboarding() {
-  // Persist current settings with onboarded=true, then start the engine.
   s.onboarded = true
   await BreakService.SaveSettings({ ...s })
   await BreakService.CompleteOnboarding()
@@ -65,16 +77,9 @@ async function completeOnboarding() {
 }
 
 function startBreak() { BreakService.StartBreakNow() }
-function skipBreak() { BreakService.SkipBreak() }
-function postponeBreak() { BreakService.PostponeBreak() }
-function reset() { BreakService.Reset() }
 function togglePause() {
-  if (state.value.paused) BreakService.Resume()
+  if (isPaused.value) BreakService.Resume()
   else BreakService.Pause()
-}
-function toggleEngine() {
-  if (engineRunning.value) BreakService.Pause()
-  else BreakService.Resume()
 }
 
 // Slider values are bound as number[] (reka-ui Slider contract); convert.
@@ -129,9 +134,9 @@ function fmt(sec: number): string {
         </div>
       </div>
       <div class="flex items-center gap-2" v-if="onboarded">
-        <Button variant="ghost" size="sm" @click="toggleEngine">
-          <component :is="engineRunning ? Pause : Play" class="size-3.5" />
-          {{ engineRunning ? t('actions.pause') : t('actions.resume') }}
+        <Button variant="ghost" size="sm" @click="togglePause">
+          <component :is="isPaused ? Play : Pause" class="size-3.5" />
+          {{ isPaused ? t('actions.resume') : t('actions.pause') }}
         </Button>
         <Button variant="secondary" size="sm" @click="startBreak">
           <Clock class="size-3.5" />
@@ -154,18 +159,29 @@ function fmt(sec: number): string {
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-5">
-          <!-- language -->
-          <div class="space-y-1.5">
-            <Label>{{ t('onboarding.language') }}</Label>
-            <Select :model-value="locale" @update:model-value="changeLanguage">
-              <SelectTrigger class="w-[220px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zh-CN">简体中文</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-              </SelectContent>
-            </Select>
+          <!-- language + appearance, side by side -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
+              <Select :model-value="locale" @update:model-value="changeLanguage">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zh-CN">简体中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1.5">
+              <Label class="flex items-center gap-1.5"><Sun class="size-3.5" />{{ t('options.theme') }}</Label>
+              <Select :model-value="s.theme || 'system'" @update:model-value="changeTheme">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">{{ t('options.themeSystem') }}</SelectItem>
+                  <SelectItem value="light">{{ t('options.themeLight') }}</SelectItem>
+                  <SelectItem value="dark">{{ t('options.themeDark') }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <Separator />
@@ -209,19 +225,18 @@ function fmt(sec: number): string {
       <Tabs default-value="timing" class="flex h-full flex-col">
         <TabsList class="self-start">
           <TabsTrigger value="timing"><Clock class="size-3.5 mr-1" />{{ t('nav.timing') }}</TabsTrigger>
-          <TabsTrigger value="options"><Check class="size-3.5 mr-1" />{{ t('nav.options') }}</TabsTrigger>
+          <TabsTrigger value="options">{{ t('nav.options') }}</TabsTrigger>
           <TabsTrigger value="shortcuts">{{ t('nav.shortcuts') }}</TabsTrigger>
           <TabsTrigger value="about">{{ t('nav.about') }}</TabsTrigger>
         </TabsList>
 
         <!-- Timing -->
-        <TabsContent value="timing" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+        <TabsContent value="timing" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
           <Card>
             <CardHeader>
               <CardTitle>{{ t('timing.title') }}</CardTitle>
             </CardHeader>
             <CardContent class="space-y-7">
-              <!-- focus -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.focusDuration') }}</Label>
@@ -231,7 +246,6 @@ function fmt(sec: number): string {
                 <p class="text-xs text-muted-foreground">{{ t('timing.focusDesc') }}</p>
               </div>
               <Separator />
-              <!-- short break -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.shortBreak') }}</Label>
@@ -241,7 +255,6 @@ function fmt(sec: number): string {
                 <p class="text-xs text-muted-foreground">{{ t('timing.shortDesc') }}</p>
               </div>
               <Separator />
-              <!-- long break -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.longBreak') }}</Label>
@@ -251,7 +264,6 @@ function fmt(sec: number): string {
                 <p class="text-xs text-muted-foreground">{{ t('timing.longDesc') }}</p>
               </div>
               <Separator />
-              <!-- long break interval -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.longBreakEvery') }}</Label>
@@ -261,7 +273,6 @@ function fmt(sec: number): string {
                 <p class="text-xs text-muted-foreground">{{ t('timing.everyDesc') }}</p>
               </div>
               <Separator />
-              <!-- pre break warning -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.preBreakWarning') }}</Label>
@@ -271,7 +282,6 @@ function fmt(sec: number): string {
                 <p class="text-xs text-muted-foreground">{{ t('timing.preDesc') }}</p>
               </div>
               <Separator />
-              <!-- idle -->
               <div class="space-y-2">
                 <div class="flex items-baseline justify-between">
                   <Label>{{ t('timing.idlePause') }}</Label>
@@ -285,10 +295,41 @@ function fmt(sec: number): string {
         </TabsContent>
 
         <!-- Options -->
-        <TabsContent value="options" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+        <TabsContent value="options" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
           <Card>
             <CardHeader><CardTitle>{{ t('options.title') }}</CardTitle></CardHeader>
             <CardContent class="space-y-1">
+              <!-- appearance -->
+              <div class="flex items-center justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label class="flex items-center gap-1.5"><Sun class="size-3.5" />{{ t('options.theme') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ t('options.themeDesc') }}</p>
+                </div>
+                <Select :model-value="s.theme || 'system'" @update:model-value="changeTheme">
+                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="system"><span class="flex items-center gap-2"><Monitor class="size-3.5" />{{ t('options.themeSystem') }}</span></SelectItem>
+                    <SelectItem value="light"><span class="flex items-center gap-2"><Sun class="size-3.5" />{{ t('options.themeLight') }}</span></SelectItem>
+                    <SelectItem value="dark"><span class="flex items-center gap-2"><Moon class="size-3.5" />{{ t('options.themeDark') }}</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Separator />
+              <!-- language -->
+              <div class="flex items-center justify-between gap-4 py-3">
+                <div class="space-y-0.5">
+                  <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
+                  <p class="text-xs text-muted-foreground">{{ locale === 'zh-CN' ? '简体中文' : 'English' }}</p>
+                </div>
+                <Select :model-value="locale" @update:model-value="changeLanguage">
+                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zh-CN">简体中文</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Separator />
               <div class="flex items-start justify-between gap-4 py-3">
                 <div class="space-y-0.5">
                   <Label>{{ t('options.longBreaks') }}</Label>
@@ -312,27 +353,12 @@ function fmt(sec: number): string {
                 </div>
                 <Switch :model-value="s.autoStart" @update:model-value="(v:any) => { s.autoStart = v; touch() }" />
               </div>
-              <Separator />
-              <!-- language -->
-              <div class="flex items-center justify-between gap-4 py-3">
-                <div class="space-y-0.5">
-                  <Label class="flex items-center gap-1.5"><Languages class="size-3.5" />{{ t('onboarding.language') }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ locale === 'zh-CN' ? '简体中文' : 'English' }}</p>
-                </div>
-                <Select :model-value="locale" @update:model-value="changeLanguage">
-                  <SelectTrigger class="w-[150px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zh-CN">简体中文</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <!-- Shortcuts -->
-        <TabsContent value="shortcuts" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+        <TabsContent value="shortcuts" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
           <Card>
             <CardHeader><CardTitle>{{ t('shortcuts.title') }}</CardTitle></CardHeader>
             <CardContent class="space-y-4">
@@ -360,7 +386,7 @@ function fmt(sec: number): string {
         </TabsContent>
 
         <!-- About -->
-        <TabsContent value="about" class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+        <TabsContent value="about" class="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
           <Card>
             <CardHeader>
               <CardTitle class="flex items-center gap-2"><Eye class="size-4 text-primary" />{{ t('app.name') }}</CardTitle>
@@ -379,27 +405,25 @@ function fmt(sec: number): string {
       </Tabs>
     </section>
 
-    <!-- Footer (only regular settings) -->
-    <footer v-if="onboarded" class="flex items-center justify-between gap-2 px-7 py-4 border-t border-border/60">
-      <span class="text-xs font-medium text-emerald-400 transition-opacity" :class="saved ? 'opacity-100' : 'opacity-0'">
+    <!-- Footer: settings save only. Day-to-day controls (skip / postpone /
+         reset) live in the tray menu and shortcuts, so the settings panel
+         stays focused on configuration. -->
+    <footer v-if="onboarded" class="flex items-center justify-end gap-2 px-7 py-4 border-t border-border/60">
+      <span class="mr-auto text-xs font-medium text-emerald-500 transition-opacity" :class="saved ? 'opacity-100' : 'opacity-0'">
         <Check class="inline size-3 mr-1" />{{ t('actions.saved') }}
       </span>
-      <div class="flex items-center gap-2">
-        <Button variant="ghost" size="sm" @click="skipBreak"><SkipForward class="size-3.5" />{{ t('actions.skip') }}</Button>
-        <Button variant="ghost" size="sm" @click="postponeBreak">{{ t('actions.postpone') }}</Button>
-        <Button variant="ghost" size="sm" @click="reset"><RotateCcw class="size-3.5" />{{ t('actions.reset') }}</Button>
-        <Button size="sm" :disabled="!dirty" @click="save">{{ t('actions.save') }}</Button>
-      </div>
+      <Button size="sm" :disabled="!dirty" @click="save">{{ t('actions.save') }}</Button>
     </footer>
   </div>
 </template>
 
 <style scoped>
 .prefs-root {
-  /* Opaque dark surface over the translucent window so text is always readable. */
+  /* Semi-opaque surface over the translucent window: keeps text readable while
+     letting a hint of macOS vibrancy show through, and follows the theme. */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, oklch(0.16 0.012 264) 0%, oklch(0.13 0.01 264) 100%);
+  background: var(--surface);
 }
 </style>

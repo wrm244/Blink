@@ -30,6 +30,7 @@ export const i18n = createI18n({
 
 export function setLocale(locale: Locale) {
   i18n.global.locale.value = locale
+  localStorage.setItem("pm:locale", locale)
   // Keep the document language attribute in sync for accessibility.
   document.documentElement.lang = locale === "zh-CN" ? "zh-Hans" : "en"
 }

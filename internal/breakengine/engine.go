@@ -406,10 +406,17 @@ func (e *Engine) Pause() {
 	e.emit()
 }
 
-// Resume continues a paused countdown from where it froze.
+// Resume continues a paused countdown from where it froze. It also restarts
+// the focus period when the engine is idle (paused on inactivity), so a user
+// can manually "resume" without waiting to move the mouse.
 func (e *Engine) Resume() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.phase == PhaseIdle {
+		e.idle = false
+		e.startFocus(time.Now())
+		return
+	}
 	if !e.paused {
 		return
 	}

@@ -4,10 +4,11 @@ import "github.com/wailsapp/wails/v3/pkg/application"
 
 const prefsWindowName = "pm-prefs"
 
-// preferencesOptions describes the settings window: a translucent, dark,
-// frameless-inset window centered on the primary display. The window itself
-// carries the macOS vibrancy; the web page paints an opaque dark surface on
-// top so text stays readable over any wallpaper.
+// preferencesOptions describes the settings window: a translucent,
+// frameless-inset window centered on the primary display. The window carries
+// the macOS vibrancy (which follows the system appearance); the web page paints
+// a semi-opaque themed surface on top so text stays readable while keeping a
+// hint of native vibrancy.
 func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
@@ -19,7 +20,7 @@ func preferencesOptions() application.WebviewWindowOptions {
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,
 		BackgroundType:   application.BackgroundTypeTranslucent,
-		BackgroundColour: application.NewRGBA(14, 16, 28, 255),
+		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
 		Mac: application.MacWindow{
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,

@@ -69,6 +69,11 @@ export interface Settings {
     "language": string;
 
     /**
+     * Theme is the UI colour scheme: "system" (follow OS), "light", or "dark".
+     */
+    "theme": string;
+
+    /**
      * Global keyboard shortcuts (Wails accelerator syntax, e.g. "Cmd+Shift+B").
      */
     "shortcutStartBreak": string;
