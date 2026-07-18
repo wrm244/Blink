@@ -103,9 +103,13 @@ func (e *Engine) Stop() {
 		return
 	}
 	e.started = false
-	close(e.stopCh)
+	// Enqueue the hide commands BEFORE closing stopCh so windowLoop has a
+	// chance to drain them (see windowLoop) before it exits. Closing stopCh
+	// first would let windowLoop return immediately, leaving overlays on
+	// screen.
 	e.hideNotice()
 	e.hideOverlays()
+	close(e.stopCh)
 	e.mu.Unlock()
 }
 
@@ -224,6 +228,10 @@ func (e *Engine) endBreak() {
 // tick advances the state machine by one second. Caller holds e.mu.
 func (e *Engine) tick(now time.Time) {
 	if e.paused {
+		// Keep lastTick fresh while paused so a long pause does not look like
+		// system sleep on the next active tick (which would reset the focus
+		// period and silently drop the user's Resume).
+		e.lastTick = now
 		e.emit()
 		return
 	}
@@ -244,7 +252,10 @@ func (e *Engine) tick(now time.Time) {
 
 	// Idle handling only affects the focus period: while the user is away the
 	// focus countdown is held at full so they get a fresh period on return.
-	if e.phase == PhaseFocusing && e.idle {
+	// idleLoop transitions focus -> PhaseIdle when the idle threshold is hit,
+	// so this is the branch that actually fires; the previous check against
+	// PhaseFocusing was dead code (phase was already PhaseIdle by then).
+	if e.phase == PhaseIdle {
 		e.phaseEnd = now.Add(e.focusDur())
 		e.emit()
 		return
@@ -315,8 +326,11 @@ func (e *Engine) idleLoop() {
 			if idle >= threshold {
 				e.idle = true
 				// Only idle-pause the focus workflow; never interrupt a break,
-				// and leave an explicit user pause alone.
-				if e.phase != PhaseIdle && !e.phase.IsBreak() && e.phase != PhasePaused {
+				// and leave an explicit user pause alone. The check is against
+				// e.paused (the live boolean) rather than PhasePaused because
+				// Pause() freezes the countdown in place without changing the
+				// phase, so PhasePaused is never observed here.
+				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
 					e.phase = PhaseIdle
 					e.hideNotice()
 					e.hideOverlays()
@@ -351,11 +365,12 @@ func (e *Engine) GetSettings() config.Settings {
 
 // ApplySettings updates the running engine's settings. A change to the focus
 // duration takes effect immediately by restarting the current focus period;
-// an in-progress break is left to finish naturally.
+// an in-progress break is left to finish naturally. A user-initiated pause is
+// preserved: the new durations apply on the next focus period after Resume.
 func (e *Engine) ApplySettings(s config.Settings) {
 	e.mu.Lock()
 	e.settings = s
-	if e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak {
+	if !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak) {
 		e.startFocus(time.Now())
 	}
 	e.emit()

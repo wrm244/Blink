@@ -110,11 +110,12 @@ const heroSub = computed(() => {
   }
 })
 const phaseColor = computed(() => {
-  if (isPaused.value) return '#9aa2b1'
+  if (isPaused.value) return 'var(--phase-pause)'
   switch (state.value.phase) {
-    case 'shortbreak': case 'longbreak': return '#5fd8a4'
-    case 'prebreak': return '#ffb454'
-    default: return '#6b8dff'
+    case 'shortbreak': return 'var(--phase-break)'
+    case 'longbreak': return 'var(--phase-long)'
+    case 'prebreak': return 'var(--phase-prebreak)'
+    default: return 'var(--phase-focus)'
   }
 })
 const heroTime = computed(() => fmt(state.value.remainingSec))
@@ -317,10 +318,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 
 <template>
   <div class="root">
-    <div class="backdrop" aria-hidden="true">
-      <div class="glow glow-a" />
-      <div class="glow glow-b" />
-    </div>
+    <div class="backdrop" aria-hidden="true" />
 
     <div class="layout" :class="{ 'layout--collapsed': collapsed }">
       <!-- DRAWER (left, collapsible) -->
@@ -362,7 +360,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
                 </div>
               </div>
               <div class="cycle__status">
-                <span class="cycle__dot" :class="{ 'cycle__dot--paused': isPaused }" :style="{ background: cycleRunning ? phaseColor : '#9aa2b1' }" />
+                <span class="cycle__dot" :class="{ 'cycle__dot--paused': isPaused }" :style="{ background: cycleRunning ? phaseColor : 'var(--phase-pause)' }" />
                 <span>{{ cycleStatusText }}</span>
               </div>
               <button class="cycle__reset" @click="reset">
@@ -402,7 +400,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
               <div>
                 <h1 class="hero__title">{{ t('app.name') }}</h1>
                 <p class="hero__sub">
-                  <span class="hero__dot" :style="{ background: phaseColor, boxShadow: `0 0 8px ${phaseColor}` }" />
+                  <span class="hero__dot" :style="{ background: phaseColor }" />
                   <span class="hero__label">{{ heroTitle }}</span>
                 </p>
               </div>
@@ -413,7 +411,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
           </div>
 
           <div v-if="onboarded && state.phase && !isPaused" class="hero__progress">
-            <div class="hero__progress-bar" :style="{ width: (progress * 100) + '%', background: `linear-gradient(90deg, ${phaseColor}, var(--accent-2))` }" />
+            <div class="hero__progress-bar" :style="{ width: (progress * 100) + '%', background: phaseColor }" />
           </div>
 
           <div class="hero__bar">
@@ -594,26 +592,6 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
   inset: 0;
   z-index: 0;
   background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
-  overflow: hidden;
-}
-.glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-}
-.glow-a {
-  width: 40vw;
-  height: 40vw;
-  top: -12vw;
-  right: -8vw;
-  background: var(--glow-a);
-}
-.glow-b {
-  width: 32vw;
-  height: 32vw;
-  bottom: -10vw;
-  left: -8vw;
-  background: var(--glow-b);
 }
 
 /* ---- fixed-height two-column layout ---- */
@@ -689,9 +667,8 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 }
 .nav__item:hover { background: var(--accent-soft); color: var(--text); }
 .nav__item--on {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   color: var(--on-accent);
-  box-shadow: 0 6px 16px -6px var(--accent-soft);
 }
 /* icon rail (collapsed) */
 .nav--rail { display: flex; flex-direction: column; gap: 2px; align-items: center; }
@@ -765,7 +742,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 }
 .seg:hover { color: var(--text); }
 .seg--on {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   color: var(--on-accent);
 }
 .seg--icon { display: grid; place-items: center; padding: 5px 8px; }
@@ -780,7 +757,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 }
 
 .hero { padding: 20px 24px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
-.hero--break :deep(.hero__logo) { background: rgba(95, 216, 164, 0.16) !important; }
+.hero--break :deep(.hero__logo) { background: rgba(91, 138, 111, 0.16) !important; color: var(--phase-break) !important; }
 .hero--paused :deep(.hero__logo) { background: rgba(154, 162, 177, 0.18) !important; color: var(--text-muted) !important; }
 .hero__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .hero__brand { display: flex; gap: 12px; align-items: center; }
@@ -873,12 +850,11 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
   transition: all 0.18s;
   overflow: hidden;
 }
-.preset:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); }
+.preset:hover { color: var(--text); border-color: var(--accent); }
 .preset--on {
   color: var(--on-accent);
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   border-color: transparent;
-  box-shadow: 0 6px 18px -6px var(--accent-soft);
 }
 .preset__name { font-size: 13px; font-weight: 600; }
 .preset__desc { font-size: 11px; color: var(--text-faint); line-height: 1.35; }
@@ -947,8 +923,8 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
   padding: 10px 16px;
   border-radius: 14px;
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   transition: opacity 0.2s, transform 0.25s;
@@ -965,16 +941,16 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-  animation: pm-pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: pm-pulse 2.4s ease-in-out infinite;
 }
-.savebar__saved { color: #5fd8a4; display: flex; align-items: center; gap: 5px; }
+.savebar__saved { color: var(--phase-break); display: flex; align-items: center; gap: 5px; }
 .savebar__idle { color: var(--text-faint); }
 .savebar__right { display: flex; gap: 8px; align-items: center; }
 
 @keyframes pm-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
-  50% { box-shadow: 0 0 0 6px transparent; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Slide-up transition for the save bar */

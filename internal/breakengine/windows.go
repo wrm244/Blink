@@ -41,7 +41,17 @@ func (e *Engine) windowLoop() {
 	for {
 		select {
 		case <-e.stopCh:
-			return
+			// Drain any commands queued by Stop (e.g. hide overlays) before
+			// exiting, otherwise the select above might pick stopCh first and
+			// leave the overlay/notice windows on screen.
+			for {
+				select {
+				case c := <-e.cmdCh:
+					e.execWindowCmd(c)
+				default:
+					return
+				}
+			}
 		case c := <-e.cmdCh:
 			e.execWindowCmd(c)
 		}
@@ -131,11 +141,11 @@ func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
 		X:              s.Bounds.X,
 		Y:              s.Bounds.Y,
 		InitialPosition: application.WindowXY,
-		// Solid dark background: macOS Tahoe's translucent vibrancy renders a
-		// bright glassy frame at the window edges, so the break overlay uses an
-		// opaque solid surface instead - no frame, and a calmer rest screen.
+		// Solid dark slate background: matches the CSS gradient so there is no
+		// color flash before the webview paints. Opaque (not translucent) to
+		// avoid macOS Tahoe's bright glassy frame at the window edges.
 		BackgroundType:   application.BackgroundTypeSolid,
-		BackgroundColour:  application.NewRGB(10, 12, 18),
+		BackgroundColour:  application.NewRGB(24, 26, 29),
 		Mac: application.MacWindow{
 			WindowLevel:        application.MacWindowLevelStatus,
 			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorStationary,

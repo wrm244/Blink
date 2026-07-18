@@ -31,7 +31,7 @@ const arr = computed({
   >
     <SliderTrack class="relative h-1.5 w-full grow overflow-hidden rounded-full bg-[var(--track)]">
       <SliderRange
-        class="absolute h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-2))] shadow-[0_0_12px_var(--accent-soft)]"
+        class="absolute h-full rounded-full bg-[var(--accent)]"
       />
     </SliderTrack>
     <SliderThumb

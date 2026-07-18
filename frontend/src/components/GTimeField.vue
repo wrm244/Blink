@@ -144,7 +144,7 @@ const display = computed(() => props.displayValue(props.modelValue))
 }
 .tf__chip--on {
   color: var(--on-accent);
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   border-color: transparent;
 }
 </style>

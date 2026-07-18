@@ -15,8 +15,10 @@ func preferencesOptions() application.WebviewWindowOptions {
 		Title:            "PocketMind",
 		Width:            920,
 		Height:           660,
-		MinWidth:         760,
-		MinHeight:        560,
+		// Min size matches the default size so the window opens fixed and
+		// cannot be shrunk below the designed layout.
+		MinWidth:         920,
+		MinHeight:        660,
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,
 		BackgroundType:   application.BackgroundTypeSolid,

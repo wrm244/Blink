@@ -35,7 +35,7 @@ const classes = computed(() =>
         cn(
           'relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-200',
           modelValue === opt.value
-            ? 'text-[var(--on-accent)] bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] shadow-[0_4px_14px_-4px_var(--accent-soft)]'
+            ? 'text-[var(--on-accent)] bg-[var(--accent)]'
             : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--accent-soft)]',
         )
       "

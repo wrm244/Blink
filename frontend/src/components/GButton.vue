@@ -15,14 +15,14 @@ const props = withDefaults(defineProps<{
 const base = 'relative inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all duration-200 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97]'
 
 const variants = {
-  // Primary: accent gradient fill, glows on hover.
-  primary: 'text-[var(--on-accent)] shadow-[0_6px_20px_-4px_var(--accent-soft)] bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] hover:brightness-110 hover:shadow-[0_8px_28px_-4px_var(--accent-soft)]',
+  // Primary: solid accent fill, subtle lift on hover.
+  primary: 'text-[var(--on-accent)] shadow-[0_4px_14px_-4px_var(--accent-soft)] bg-[var(--accent)] hover:brightness-110 hover:shadow-[0_6px_18px_-4px_var(--accent-soft)]',
   // Glass: translucent panel button.
   glass: 'glass text-[var(--text)] hover:bg-[var(--glass-bg-strong)]',
   // Ghost: bare, hover highlight.
   ghost: 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--accent-soft)]',
   // Danger.
-  danger: 'text-[#ff7a7a] glass hover:bg-[rgba(255,90,90,0.12)]',
+  danger: 'text-[#c8554f] glass hover:bg-[rgba(200,85,79,0.12)]',
 }
 
 const sizes = {

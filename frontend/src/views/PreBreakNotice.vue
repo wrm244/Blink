@@ -68,9 +68,9 @@ function postpone() { BreakService.PostponeBreak() }
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #ffb454;
-  box-shadow: 0 0 10px rgba(255, 180, 84, 0.9);
-  animation: pm-breathe 1.6s ease-in-out infinite;
+  background: var(--phase-prebreak);
+  box-shadow: 0 0 0 3px rgba(184, 146, 74, 0.18);
+  animation: pm-breathe 2.4s ease-in-out infinite;
 }
 .body {
   flex: 1;

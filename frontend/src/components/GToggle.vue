@@ -23,7 +23,7 @@ const checked = computed({
     :class="
       cn(
         'relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-[var(--glass-border)] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60',
-        checked ? 'bg-[linear-gradient(135deg,var(--accent),var(--accent-2))]' : 'bg-[var(--track)]',
+        checked ? 'bg-[var(--accent)]' : 'bg-[var(--track)]',
         props.class,
       )
     "

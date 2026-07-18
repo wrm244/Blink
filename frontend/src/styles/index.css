@@ -3,76 +3,84 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * PocketMind - Glassmorphism design system.
- * Palette: dark neutral zinc with a blue accent, tuned to read over a
- * translucent macOS vibrancy window. Each view paints its own layered
- * gradient backdrop; glass panels sit on top with backdrop blur.
+ * PocketMind - Slate design system.
+ * Single neutral slate accent, no gradients. Semantic phase colors are
+ * desaturated so the UI reads as calm and sturdy rather than playful.
+ * Each view paints its own solid backdrop; panels sit on top with a
+ * restrained backdrop blur.
  */
 
 :root {
   /* ---- light theme ---- */
-  --bg-from: #eef1f6;
-  --bg-to: #dfe4ec;
-  --glow-a: rgba(107, 141, 255, 0.18);
-  --glow-b: rgba(160, 130, 255, 0.10);
+  --bg-from: #f4f4f3;
+  --bg-to: #e8e8e6;
 
-  --text: #1a1d24;
+  --text: #1c1f24;
   --text-muted: #5a6273;
   --text-faint: #9aa2b1;
 
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-bg-strong: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --glass-hl: rgba(255, 255, 255, 0.9);
-  --glass-shadow: 0 8px 32px rgba(30, 40, 70, 0.12), 0 2px 8px rgba(30, 40, 70, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(20, 25, 35, 0.1);
+  --glass-hl: rgba(255, 255, 255, 0.8);
+  --glass-shadow: 0 8px 28px rgba(30, 35, 45, 0.08), 0 2px 6px rgba(30, 35, 45, 0.04);
 
-  --track: rgba(20, 25, 40, 0.1);
-  --track-fill: #6b8dff;
+  --track: rgba(20, 25, 35, 0.08);
+  --track-fill: #475569;
   --thumb: #ffffff;
 
-  --accent: #6b8dff;
-  --accent-2: #9b7dff;
-  --accent-soft: rgba(107, 141, 255, 0.14);
+  --accent: #475569;
+  --accent-soft: rgba(71, 85, 105, 0.12);
   --on-accent: #ffffff;
 
-  --ring-track: rgba(20, 25, 40, 0.1);
-  --ring-progress: #6b8dff;
+  --ring-track: rgba(20, 25, 35, 0.08);
+  --ring-progress: #475569;
 
-  --scrollbar-thumb: rgba(60, 70, 90, 0.28);
-  --scrollbar-thumb-hover: rgba(60, 70, 90, 0.45);
+  --scrollbar-thumb: rgba(60, 70, 90, 0.25);
+  --scrollbar-thumb-hover: rgba(60, 70, 90, 0.4);
+
+  /* Desaturated semantic phase colors (used inline by views). */
+  --phase-focus: #64748b;
+  --phase-break: #5b8a6f;
+  --phase-long: #4f7563;
+  --phase-prebreak: #b8924a;
+  --phase-pause: #9aa2b1;
 }
 
 .dark {
   /* ---- dark theme (primary) ---- */
-  --bg-from: #15171c;
-  --bg-to: #1f2128;
-  --glow-a: rgba(107, 141, 255, 0.16);
-  --glow-b: rgba(160, 130, 255, 0.10);
+  --bg-from: #181a1d;
+  --bg-to: #22252a;
 
-  --text: #f0f2f6;
-  --text-muted: #9aa2b1;
-  --text-faint: #6b7384;
+  --text: #e8e6e1;
+  --text-muted: #a8a59f;
+  --text-faint: #6b7280;
 
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-strong: rgba(255, 255, 255, 0.08);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-hl: rgba(255, 255, 255, 0.14);
-  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --glass-bg: rgba(255, 255, 255, 0.045);
+  --glass-bg-strong: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-hl: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.18);
 
-  --track: rgba(255, 255, 255, 0.1);
-  --track-fill: #6b8dff;
-  --thumb: #f0f2f6;
+  --track: rgba(255, 255, 255, 0.08);
+  --track-fill: #94a3b8;
+  --thumb: #e8e6e1;
 
-  --accent: #6b8dff;
-  --accent-2: #9b7dff;
-  --accent-soft: rgba(107, 141, 255, 0.18);
-  --on-accent: #0b0e14;
+  --accent: #94a3b8;
+  --accent-soft: rgba(148, 163, 184, 0.15);
+  --on-accent: #181a1d;
 
-  --ring-track: rgba(255, 255, 255, 0.1);
-  --ring-progress: #6b8dff;
+  --ring-track: rgba(255, 255, 255, 0.08);
+  --ring-progress: #94a3b8;
 
-  --scrollbar-thumb: rgba(180, 190, 210, 0.22);
-  --scrollbar-thumb-hover: rgba(180, 190, 210, 0.4);
+  --scrollbar-thumb: rgba(180, 190, 205, 0.22);
+  --scrollbar-thumb-hover: rgba(180, 190, 205, 0.4);
+
+  --phase-focus: #8a96a8;
+  --phase-break: #6b8f7a;
+  --phase-long: #5b8074;
+  --phase-prebreak: #c9a461;
+  --phase-pause: #6b7280;
 }
 
 @theme inline {
@@ -82,7 +90,6 @@
   --color-text-muted: var(--text-muted);
   --color-text-faint: var(--text-faint);
   --color-accent: var(--accent);
-  --color-accent-2: var(--accent-2);
   --color-on-accent: var(--on-accent);
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
@@ -143,12 +150,13 @@
 /*
  * Reusable glass utility. Applied via class="glass" (weak) or "glass-strong".
  * Defined as plain CSS so it composes cleanly with Tailwind utilities.
+ * Blur is restrained (no oversaturate) to keep the look sturdy, not glossy.
  */
 @layer components {
   .glass {
     background: var(--glass-bg);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     position: relative;
@@ -169,12 +177,12 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    opacity: 0.7;
+    opacity: 0.6;
   }
   .glass-strong {
     background: var(--glass-bg-strong);
-    backdrop-filter: blur(28px) saturate(170%);
-    -webkit-backdrop-filter: blur(28px) saturate(170%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     position: relative;
@@ -190,7 +198,7 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    opacity: 0.8;
+    opacity: 0.7;
   }
 }
 
@@ -223,16 +231,5 @@
   50% {
     opacity: 0.55;
     transform: scale(0.85);
-  }
-}
-@keyframes pm-pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 var(--accent-soft);
-  }
-  70% {
-    box-shadow: 0 0 0 10px transparent;
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
   }
 }
