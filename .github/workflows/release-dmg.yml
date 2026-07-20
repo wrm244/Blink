@@ -27,14 +27,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Native runners per arch: macos-14 = Apple Silicon (arm64),
-        # macos-13 = Intel (amd64). Each builds natively so CGO + macOS
-        # frameworks link correctly.
+        # Native macOS 26 runners per arch: arm64 on macos-26, x64 on
+        # macos-26-intel. Each builds natively so CGO + macOS frameworks link
+        # correctly.
         include:
           - arch: arm64
-            runner: macos-14
+            runner: macos-26
           - arch: amd64
-            runner: macos-13
+            runner: macos-26-intel
 
     steps:
       - name: Checkout
