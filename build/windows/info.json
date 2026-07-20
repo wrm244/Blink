@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "0.1.0"
+		"file_version": "0.1.0-beta1"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.1.0",
+			"ProductVersion": "0.1.0-beta1",
 			"CompanyName": "Blink",
 			"FileDescription": "Smart break reminders to ease eye strain, modelled on the 20-20-20 rule.",
 			"LegalCopyright": "(c) 2026, Blink",
