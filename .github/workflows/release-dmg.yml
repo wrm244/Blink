@@ -1,0 +1,97 @@
+name: Release DMG
+
+# Builds PocketMind into a macOS .dmg for Apple Silicon (arm64) and Intel
+# (amd64), and attaches both to a GitHub Release when a version tag is pushed.
+#
+# Trigger: push a tag like  v0.2.0  ->  git tag v0.2.0 && git push origin v0.2.0
+# The workflow builds on a native macOS runner for each arch (so CGO/macOS
+# frameworks build natively, no cross-compile headaches), packages a drag-to-
+# Install .dmg, and uploads it to the release with auto-generated release notes.
+#
+# Note: the .app is ad-hoc signed (not Developer ID / notarised). Users open it
+# the first time via right-click -> Open (Gatekeeper workaround). See README.
+
+on:
+  push:
+    tags:
+      - 'v*'          # any tag starting with v, e.g. v0.2.0
+  workflow_dispatch:   # allow manual runs from the Actions tab
+
+permissions:
+  contents: write      # needed to create the release + upload assets
+
+jobs:
+  build-dmg:
+    name: Build DMG (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native runners per arch: macos-14 = Apple Silicon (arm64),
+        # macos-13 = Intel (amd64). Each builds natively so CGO + macOS
+        # frameworks link correctly.
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: amd64
+            runner: macos-13
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install
+
+      - name: Build + package .app + create .dmg
+        run: wails3 task darwin:dmg
+
+      - name: Rename DMG with arch suffix (normalize)
+        id: dmg
+        run: |
+          # The DMG is named PocketMind-<version>-<arch>.dmg. Find it and
+          # expose the path + a clean asset name for the release.
+          DMG=$(ls bin/PocketMind-*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "No DMG found in bin/"; ls -la bin/; exit 1
+          fi
+          echo "path=$DMG" >> "$GITHUB_OUTPUT"
+          echo "Found DMG: $DMG"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketMind-dmg-${{ matrix.arch }}
+          path: ${{ steps.dmg.outputs.path }}
+          if-no-files-found: error
+
+      - name: Attach DMG to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.dmg.outputs.path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}   # v0.2.0-beta1 -> prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
