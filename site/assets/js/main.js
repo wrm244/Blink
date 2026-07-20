@@ -2,6 +2,7 @@
  * Blink 落地页脚本
  * - 从 GitHub API 拉取最新 Release（含预发布），自动填充「一键下载」按钮
  * - 部署到 *.github.io 时自动识别仓库；本地/其他域名回退到真实仓库
+ * - 分体下载按钮：默认 Apple Silicon，可下拉切换 Intel
  * - API 失败时优雅降级到 Releases 页面
  *
  * 说明：本项目目前只发 beta（pre-release），而 /releases/latest 只返回
@@ -16,6 +17,8 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
 
 (function () {
   "use strict";
+
+  const ARCH_LABELS = { arm64: "Apple Silicon", amd64: "Intel Mac" };
 
   function getRepo() {
     if (window.BLINK_REPO && window.BLINK_REPO.owner && window.BLINK_REPO.repo) {
@@ -35,12 +38,25 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
     return assets.find((a) => a.name.toLowerCase().endsWith(suffix)) || null;
   }
 
-  function setButton(btn, url, label) {
-    if (!btn) return;
-    btn.href = url || "#";
-    btn.removeAttribute("data-loading");
-    const t = btn.querySelector(".btn-text");
-    if (t && label) t.textContent = label;
+  function closeAllMenus() {
+    document.querySelectorAll(".dl.open").forEach((dl) => {
+      dl.classList.remove("open");
+      const t = dl.querySelector(".dl-toggle");
+      if (t) t.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  // 设置某个分体按钮当前选中的架构，并刷新主按钮指向
+  function setDlArch(dl, arch, fallbackUrl) {
+    const url = dl._urls && dl._urls[arch] ? dl._urls[arch] : fallbackUrl || "#";
+    const main = dl.querySelector(".dl-main");
+    const archEl = dl.querySelector(".dl-arch");
+    if (main) main.href = url;
+    if (archEl) archEl.textContent = ARCH_LABELS[arch] || "";
+    dl.querySelectorAll(".dl-item").forEach((it) =>
+      it.classList.toggle("is-active", it.dataset.arch === arch)
+    );
+    dl._current = arch;
   }
 
   async function initDownload() {
@@ -50,17 +66,18 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
     const repoUrl = `https://github.com/${repo.owner}/${repo.repo}`;
     const releasesUrl = repoUrl + "/releases";
 
-    const primaryBtns = [document.getElementById("download-btn"), document.getElementById("download-btn-2")];
-    const intelLink = document.getElementById("download-intel");
     const versionTag = document.getElementById("version-tag");
     const releasesLink = document.getElementById("releases-link");
+    const dls = Array.from(document.querySelectorAll(".dl"));
 
     if (releasesLink) releasesLink.href = releasesUrl;
-    primaryBtns.forEach((b) => b && (b.href = releasesUrl));
     // 自动把占位 github.com 链接（导航/页脚）指向真实仓库
     document
       .querySelectorAll('a[href="https://github.com"]')
       .forEach((a) => (a.href = repoUrl));
+
+    // 先降级：默认 Apple Silicon 指向 Releases 页，等 API 返回再替换
+    dls.forEach((dl) => setDlArch(dl, "arm64", releasesUrl));
 
     try {
       const res = await fetch(apiUrl, {
@@ -75,25 +92,62 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
       if (versionTag) versionTag.textContent = "最新版本 " + tag;
 
       const arm = findAsset(data.assets, "-arm64.dmg") || findAsset(data.assets, ".dmg");
-      const intel = findAsset(data.assets, "-amd64.dmg") || findAsset(data.assets, "-x64.dmg");
+      const intel =
+        findAsset(data.assets, "-amd64.dmg") || findAsset(data.assets, "-x64.dmg");
 
-      if (arm) {
-        primaryBtns.forEach((b) => setButton(b, arm.browser_download_url, "下载 Blink"));
-      }
-      if (intel && intelLink) {
-        intelLink.href = intel.browser_download_url;
-        intelLink.style.display = "";
-        intelLink.textContent = "Intel 版本";
-      } else if (intelLink) {
-        intelLink.style.display = "none";
-      }
+      dls.forEach((dl) => {
+        dl._urls = {
+          arm64: arm ? arm.browser_download_url : releasesUrl,
+          amd64: intel ? intel.browser_download_url : releasesUrl,
+        };
+        // Intel 不存在则禁用该项
+        const intelItem = dl.querySelector('.dl-item[data-arch="amd64"]');
+        if (!intel && intelItem) {
+          intelItem.classList.add("is-disabled");
+          intelItem.disabled = true;
+        }
+        // 保持当前选中架构，刷新其下载地址
+        setDlArch(dl, dl._current || "arm64", releasesUrl);
+      });
     } catch (err) {
       // 网络/限流失败：保留按钮指向 Releases 页面，版本标签降级
       if (versionTag) versionTag.textContent = "免费 · 开源";
-      primaryBtns.forEach((b) => b && b.removeAttribute("data-loading"));
-      if (intelLink) intelLink.style.display = "none";
       console.warn("获取最新 Release 失败，已降级到 Releases 页面：", err);
     }
+  }
+
+  function initSplitButtons() {
+    document.querySelectorAll(".dl").forEach((dl) => {
+      const toggle = dl.querySelector(".dl-toggle");
+      if (toggle) {
+        toggle.addEventListener("click", function (e) {
+          e.stopPropagation();
+          const willOpen = !dl.classList.contains("open");
+          closeAllMenus();
+          if (willOpen) {
+            dl.classList.add("open");
+            toggle.setAttribute("aria-expanded", "true");
+          }
+        });
+      }
+      dl.querySelectorAll(".dl-item").forEach((item) => {
+        item.addEventListener("click", function () {
+          if (item.disabled) return;
+          setDlArch(dl, item.dataset.arch, null);
+          dl.classList.remove("open");
+          const t = dl.querySelector(".dl-toggle");
+          if (t) t.setAttribute("aria-expanded", "false");
+        });
+      });
+    });
+
+    // 点击空白处 / 按 Esc 关闭所有菜单
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest(".dl")) closeAllMenus();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeAllMenus();
+    });
   }
 
   // 滚动揭示动画
@@ -119,6 +173,7 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
 
   document.addEventListener("DOMContentLoaded", function () {
     initDownload();
+    initSplitButtons();
     initReveal();
   });
 })();

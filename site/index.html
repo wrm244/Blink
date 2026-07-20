@@ -21,49 +21,80 @@
 
   <!-- 顶部导航 -->
   <header class="nav">
-    <a class="nav-brand" href="#top">
-      <img src="assets/images/logo.png" alt="Blink" width="34" height="34" />
-      <span>Blink</span>
-    </a>
-    <nav class="nav-links">
-      <a href="#features">功能</a>
-      <a href="#screens">截图</a>
-      <a href="#download">下载</a>
-      <a href="#tech">技术栈</a>
-      <a class="nav-gh" href="https://github.com" target="_blank" rel="noopener">GitHub ↗</a>
-    </nav>
+    <div class="nav-inner">
+      <a class="nav-brand" href="#top">
+        <img src="assets/images/logo.png" alt="Blink" width="34" height="34" />
+        <span>Blink</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#screens">界面</a>
+        <a href="#download">下载</a>
+        <a href="#tech">技术栈</a>
+        <a class="nav-gh" href="https://github.com" target="_blank" rel="noopener">GitHub ↗</a>
+      </nav>
+    </div>
   </header>
 
   <main id="top">
-    <!-- Hero -->
+    <!-- Hero（全宽，内容居中可读） -->
     <section class="hero">
-      <div class="hero-logo reveal">
-        <img src="assets/images/logo.png" alt="Blink Logo" width="120" height="120" />
-      </div>
-      <p class="hero-eyebrow reveal">macOS 菜单栏 · 护眼提醒</p>
-      <h1 class="hero-title reveal">让眼睛，<span class="grad">按时休息</span></h1>
-      <p class="hero-sub reveal">
-        基于眼科医生推荐的 <strong>20-20-20 规则</strong>：每用屏 20 分钟，看 20 英尺外 20 秒。
-        Blink 默默计时，到点温柔提醒你抬起头——你只管跟着做，其余交给它。
-      </p>
+      <div class="hero-inner">
+        <div class="hero-logo reveal">
+          <img src="assets/images/logo.png" alt="Blink Logo" width="120" height="120" />
+        </div>
+        <p class="hero-eyebrow reveal">macOS 菜单栏 · 护眼提醒</p>
+        <h1 class="hero-title reveal">让眼睛，<span class="grad">按时休息</span></h1>
+        <p class="hero-sub reveal">
+          基于眼科医生推荐的 <strong>20-20-20 规则</strong>：每用屏 20 分钟，看 20 英尺外 20 秒。
+          Blink 默默计时，到点温柔提醒你抬起头——你只管跟着做，其余交给它。
+        </p>
 
-      <div class="hero-cta reveal">
-        <a id="download-btn" class="btn btn-primary" href="#" data-loading="true">
-          <span class="btn-icon">⬇</span>
-          <span class="btn-text">下载 Blink</span>
-        </a>
-        <a class="btn btn-ghost" href="https://github.com" target="_blank" rel="noopener">在 GitHub 查看</a>
-      </div>
+        <div class="hero-cta reveal">
+          <!-- 分体下载按钮：默认 Apple Silicon，可切换 Intel -->
+          <div class="dl" data-default="arm64">
+            <a class="dl-main" href="#" aria-label="下载 Blink">
+              <span class="dl-ico">⬇</span>
+              <span class="dl-text">
+                <span class="dl-label">下载 Blink</span>
+                <span class="dl-arch">Apple Silicon</span>
+              </span>
+            </a>
+            <button class="dl-toggle" type="button" aria-label="选择芯片架构" aria-expanded="false">
+              <svg class="dl-caret" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="dl-menu" role="menu">
+              <button class="dl-item is-active" type="button" data-arch="arm64" role="menuitem">
+                <span class="dl-item-ico">🍎</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Apple Silicon</span>
+                  <span class="dl-item-sub">M1 / M2 / M3 / M4 · 推荐</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="amd64" role="menuitem">
+                <span class="dl-item-ico">💻</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Intel Mac</span>
+                  <span class="dl-item-sub">2019 及更早款 · x86_64</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+            </div>
+          </div>
+          <a class="btn btn-ghost" href="https://github.com" target="_blank" rel="noopener">在 GitHub 查看</a>
+        </div>
 
-      <p class="hero-meta reveal">
-        <span id="version-tag" class="version-tag">读取最新版本中…</span>
-        <span class="dot">·</span> 支持 Apple Silicon / Intel
-        <span class="dot">·</span> macOS 12+
-      </p>
+        <p class="hero-meta reveal">
+          <span id="version-tag" class="version-tag">读取最新版本中…</span>
+          <span class="dot">·</span> Apple Silicon / Intel
+          <span class="dot">·</span> macOS 12+
+        </p>
 
-      <!-- 预览截图 -->
-      <div class="hero-preview reveal">
-        <img src="assets/images/settings.png" alt="Blink 设置界面预览" loading="lazy" />
+        <!-- 预览截图 -->
+        <div class="hero-preview reveal">
+          <img src="assets/images/settings.png" alt="Blink 设置界面预览" loading="lazy" />
+        </div>
       </div>
     </section>
 
@@ -115,11 +146,15 @@
       </div>
     </section>
 
-    <!-- 截图 -->
+    <!-- 截图：1 大图 + 3 小图 -->
     <section id="screens" class="section">
       <h2 class="section-title reveal">界面一览</h2>
       <p class="section-lead reveal">沉静的石板灰设计，倒计时数字才是主角。</p>
       <div class="shots">
+        <figure class="shot shot-hero reveal">
+          <img src="assets/images/settings.png" alt="设置界面" loading="lazy" />
+          <figcaption><span class="shot-tag">核心</span>设置面板 · 一切你说了算</figcaption>
+        </figure>
         <figure class="shot reveal">
           <img src="assets/images/break-countdown.png" alt="全屏休息倒计时" loading="lazy" />
           <figcaption>全屏休息倒计时</figcaption>
@@ -132,24 +167,47 @@
           <img src="assets/images/menu.png" alt="菜单栏" loading="lazy" />
           <figcaption>菜单栏下拉</figcaption>
         </figure>
-        <figure class="shot reveal">
-          <img src="assets/images/settings.png" alt="设置面板" loading="lazy" />
-          <figcaption>设置面板</figcaption>
-        </figure>
       </div>
     </section>
 
     <!-- 下载 -->
     <section id="download" class="section">
       <div class="download-box reveal">
+        <div class="download-glow" aria-hidden="true"></div>
         <h2>一键拥有你的护眼搭子</h2>
         <p>下载最新版，拖入「应用程序」即可开始。免费、开源。</p>
         <div class="download-actions">
-          <a id="download-btn-2" class="btn btn-primary btn-lg" href="#" data-loading="true">
-            <span class="btn-icon">⬇</span>
-            <span class="btn-text">下载最新版</span>
-          </a>
-          <a id="download-intel" class="btn btn-ghost" href="#" style="display:none">Intel 版本</a>
+          <div class="dl" data-default="arm64">
+            <a class="dl-main" href="#" aria-label="下载 Blink">
+              <span class="dl-ico">⬇</span>
+              <span class="dl-text">
+                <span class="dl-label">下载 Blink</span>
+                <span class="dl-arch">Apple Silicon</span>
+              </span>
+            </a>
+            <button class="dl-toggle" type="button" aria-label="选择芯片架构" aria-expanded="false">
+              <svg class="dl-caret" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="dl-menu" role="menu">
+              <button class="dl-item is-active" type="button" data-arch="arm64" role="menuitem">
+                <span class="dl-item-ico">🍎</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Apple Silicon</span>
+                  <span class="dl-item-sub">M1 / M2 / M3 / M4 · 推荐</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="amd64" role="menuitem">
+                <span class="dl-item-ico">💻</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Intel Mac</span>
+                  <span class="dl-item-sub">2019 及更早款 · x86_64</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+            </div>
+          </div>
+          <a class="btn btn-ghost" href="https://github.com" target="_blank" rel="noopener">在 GitHub 查看</a>
         </div>
         <p class="download-note">
           首次打开需<strong>右键 → 打开</strong>以绕过 Gatekeeper（应用为临时签名）。
