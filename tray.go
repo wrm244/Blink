@@ -134,15 +134,13 @@ func togglePause() {
 
 // trayStatusLoop updates the status item label, tray label and tooltip when the
 // rendered text changes. The engine emits a tick event every second while
-// counting down, but the formatted label only changes when the remaining time
-// crosses a whole second - which is every second during focus/break, but never
-// during pause/idle. By caching the last strings we skip the main-thread
-// SetLabel/SetTooltip calls (each of which triggers a native redraw) when the
-// text is identical, eliminating pointless UI work during the paused and idle
-// phases. The 2s cadence is enough for a status read-out: the per-second tick
-// event from the engine still drives the webview UI at full resolution.
+// counting down, and the formatted label changes every second during focus/
+// break phases (never during pause/idle). By caching the last strings we skip
+// the main-thread SetLabel/SetTooltip calls (each of which triggers a native
+// redraw) when the text is identical, eliminating pointless UI work during
+// the paused and idle phases.
 func trayStatusLoop() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	var lastLabel, lastTooltip string
 	for range ticker.C {
