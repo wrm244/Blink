@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blink · 智能护眼休息提醒</title>
+  <meta name="description" content="Blink 是一款 macOS 菜单栏护眼提醒应用，基于 20-20-20 规则，到点温柔提醒你抬起头，让护眼成为习惯。" />
+  <link rel="icon" type="image/png" href="assets/images/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <!-- 背景装饰光斑 -->
+  <div class="bg-aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <a class="nav-brand" href="#top">
+      <img src="assets/images/logo.png" alt="Blink" width="34" height="34" />
+      <span>Blink</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#screens">截图</a>
+      <a href="#download">下载</a>
+      <a href="#tech">技术栈</a>
+      <a class="nav-gh" href="https://github.com" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-logo reveal">
+        <img src="assets/images/logo.png" alt="Blink Logo" width="120" height="120" />
+      </div>
+      <p class="hero-eyebrow reveal">macOS 菜单栏 · 护眼提醒</p>
+      <h1 class="hero-title reveal">让眼睛，<span class="grad">按时休息</span></h1>
+      <p class="hero-sub reveal">
+        基于眼科医生推荐的 <strong>20-20-20 规则</strong>：每用屏 20 分钟，看 20 英尺外 20 秒。
+        Blink 默默计时，到点温柔提醒你抬起头——你只管跟着做，其余交给它。
+      </p>
+
+      <div class="hero-cta reveal">
+        <a id="download-btn" class="btn btn-primary" href="#" data-loading="true">
+          <span class="btn-icon">⬇</span>
+          <span class="btn-text">下载 Blink</span>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com" target="_blank" rel="noopener">在 GitHub 查看</a>
+      </div>
+
+      <p class="hero-meta reveal">
+        <span id="version-tag" class="version-tag">读取最新版本中…</span>
+        <span class="dot">·</span> 支持 Apple Silicon / Intel
+        <span class="dot">·</span> macOS 12+
+      </p>
+
+      <!-- 预览截图 -->
+      <div class="hero-preview reveal">
+        <img src="assets/images/settings.png" alt="Blink 设置界面预览" loading="lazy" />
+      </div>
+    </section>
+
+    <!-- 功能亮点 -->
+    <section id="features" class="section">
+      <h2 class="section-title reveal">为什么选择 Blink</h2>
+      <p class="section-lead reveal">不是又一个弹窗骚扰工具，而是一位安静的护眼搭子。</p>
+      <div class="grid">
+        <article class="card reveal">
+          <div class="card-ico">🧭</div>
+          <h3>首次引导</h3>
+          <p>启动先带你完成设置，按「开始专注」才正式计时，绝不冷不丁弹窗。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">⏱️</div>
+          <h3>实时倒计时</h3>
+          <p>菜单栏图标旁显示距下次休息还剩多久，节奏尽在掌握。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">🔄</div>
+          <h3>自然休息循环</h3>
+          <p>专注 → 预警 → 休息，频繁短休息穿插偶尔长休息，不割裂心流。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">🖥️</div>
+          <h3>全屏覆盖层</h3>
+          <p>覆盖所有显示器，大号倒计时 + 提示音，多屏也逃不掉。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">😴</div>
+          <h3>空闲感知</h3>
+          <p>人离开就暂停，回来继续；系统休眠后自动恢复，只在你工作时提醒。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">⌨️</div>
+          <h3>全局快捷键</h3>
+          <p>开始 / 跳过 / 推迟 / 设置，手不离键盘随心掌控。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">🎨</div>
+          <h3>完全可配置</h3>
+          <p>时长、频率、快捷键、外观、语言，一切你说了算。</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-ico">🌐</div>
+          <h3>中英双语</h3>
+          <p>默认跟随系统语言，菜单栏与界面同步本地化，随时切换。</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 截图 -->
+    <section id="screens" class="section">
+      <h2 class="section-title reveal">界面一览</h2>
+      <p class="section-lead reveal">沉静的石板灰设计，倒计时数字才是主角。</p>
+      <div class="shots">
+        <figure class="shot reveal">
+          <img src="assets/images/break-countdown.png" alt="全屏休息倒计时" loading="lazy" />
+          <figcaption>全屏休息倒计时</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <img src="assets/images/break-popup.png" alt="休息预警弹窗" loading="lazy" />
+          <figcaption>休息前预警</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <img src="assets/images/menu.png" alt="菜单栏" loading="lazy" />
+          <figcaption>菜单栏下拉</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <img src="assets/images/settings.png" alt="设置面板" loading="lazy" />
+          <figcaption>设置面板</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 下载 -->
+    <section id="download" class="section">
+      <div class="download-box reveal">
+        <h2>一键拥有你的护眼搭子</h2>
+        <p>下载最新版，拖入「应用程序」即可开始。免费、开源。</p>
+        <div class="download-actions">
+          <a id="download-btn-2" class="btn btn-primary btn-lg" href="#" data-loading="true">
+            <span class="btn-icon">⬇</span>
+            <span class="btn-text">下载最新版</span>
+          </a>
+          <a id="download-intel" class="btn btn-ghost" href="#" style="display:none">Intel 版本</a>
+        </div>
+        <p class="download-note">
+          首次打开需<strong>右键 → 打开</strong>以绕过 Gatekeeper（应用为临时签名）。
+          也可前往 <a id="releases-link" href="https://github.com" target="_blank" rel="noopener">Releases 页面</a> 查看全部版本。
+        </p>
+      </div>
+    </section>
+
+    <!-- 技术栈 -->
+    <section id="tech" class="section">
+      <h2 class="section-title reveal">技术栈</h2>
+      <div class="pills reveal">
+        <span class="pill">Wails v3</span>
+        <span class="pill">Go</span>
+        <span class="pill">Vue 3</span>
+        <span class="pill">TypeScript</span>
+        <span class="pill">Tailwind CSS v4</span>
+        <span class="pill">vue-i18n</span>
+      </div>
+      <p class="tech-note reveal">设计风格：Slate 石板灰体系 —— 单色无渐变，沉稳不打扰。</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="assets/images/logo.png" alt="Blink" width="28" height="28" />
+        <span>Blink</span>
+      </div>
+      <p>© 2026 Blink · 基于 <a href="https://www.aoa.org/healthy-eyes/caring-for-your-eyes/protecting-your-eyes/20-20-20-rule" target="_blank" rel="noopener">20-20-20 规则</a> 构建</p>
+      <p class="footer-license">以 <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT 协议</a> 开源 · <a href="https://github.com" target="_blank" rel="noopener">GitHub</a></p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

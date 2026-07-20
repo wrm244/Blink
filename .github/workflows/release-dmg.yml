@@ -16,6 +16,11 @@ on:
     tags:
       - 'v*'          # any tag starting with v, e.g. v0.2.0
   workflow_dispatch:   # allow manual runs from the Actions tab
+    inputs:
+      version:
+        description: 'App version for manual runs (e.g. 0.1.0-beta3). Ignored when triggered by a tag push.'
+        required: false
+        default: ''
 
 permissions:
   contents: write      # needed to create the release + upload assets
@@ -62,6 +67,30 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         run: pnpm install
+
+      - name: Sync version from tag
+        run: |
+          # Determine the version to embed into the build:
+          #  - tag push (refs/tags/vX.Y.Z) -> strip the leading "v"
+          #  - manual dispatch with a version input -> use that
+          #  - otherwise fall back to the version already in build/config.yml
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG=$(grep -E '^  version:' build/config.yml | sed -E 's/.*version:[[:space:]]*"?([^"]*)"?/\1/')
+          fi
+          echo "Syncing app version to: $TAG"
+          # Update config.yml so any future asset regeneration stays consistent.
+          sed -i.bak -E "s/^  version:.*/  version: \"$TAG\"/" build/config.yml
+          # Update Info.plist directly. The darwin:create:dmg task reads
+          # CFBundleShortVersionString from Info.plist to name the DMG
+          # (Blink-<version>-<arch>.dmg). We edit only this key to avoid
+          # clobbering the manual icon fix already in Info.plist.
+          plutil -replace CFBundleShortVersionString -string "$TAG" build/darwin/Info.plist
+          plutil -replace CFBundleShortVersionString -string "$TAG" build/darwin/Info.dev.plist
+          echo "Info.plist version now: $(plutil -extract CFBundleShortVersionString raw -o - build/darwin/Info.plist)"
 
       - name: Build + package .app + create .dmg
         run: wails3 task darwin:dmg
