@@ -28,9 +28,32 @@ Blink uses a **slate design system** — a single neutral accent, no gradients, 
 wails3 dev        # hot-reload development
 wails3 build      # production binary -> bin/blink
 wails3 task package   # -> bin/blink.app (codesign ad-hoc)
+wails3 task darwin:dmg # -> bin/Blink-<version>-<arch>.dmg (drag-to-install)
 ```
 
 On first launch the setup window appears. Pick a language and press **Start focusing** (or tweak timings first). The tray icon then shows a live countdown. Open the menu-bar item (or press `Cmd+Shift+,`) for Preferences, `Cmd+Shift+B` to take a break now.
+
+## Releasing a new version
+
+Releases are automated via the **Release DMG** GitHub Action (`.github/workflows/release-dmg.yml`).
+
+1. Make sure `build/config.yml` and `build/darwin/Info.plist` have the version you want to ship (the `version` field / `CFBundleShortVersionString`).
+2. Tag and push:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. The Action builds two DMGs on native macOS runners — `Blink-<version>-arm64.dmg` (Apple Silicon) and `Blink-<version>-amd64.dmg` (Intel) — and attaches both to a new GitHub Release with auto-generated release notes (from commits since the last tag).
+4. A tag containing a hyphen (e.g. `v0.2.0-beta1`) is published as a **pre-release**.
+
+### Installing a downloaded DMG (for end users)
+
+The app is **ad-hoc signed** (not Developer ID / notarised), so macOS Gatekeeper will block the first open. To run it:
+
+1. Open the `.dmg`, drag **Blink** into **Applications**.
+2. In Finder, right-click Blink → **Open** → confirm **Open** in the dialog. (The normal double-click won't work until the first right-click-open.) After that it opens normally.
+
+> If you later get a proper Apple Developer ID, configure signing + notarisation in `wails3 setup` and replace the `package` step's ad-hoc sign with `wails3 task darwin:sign:notarize`.
 
 ## Architecture
 

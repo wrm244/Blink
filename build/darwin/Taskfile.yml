@@ -191,3 +191,44 @@ tasks:
       - task: package
     cmds:
       - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --notarize {{.CLI_ARGS}}
+
+  dmg:
+    summary: Packages the .app into a drag-to-Install .dmg image
+    desc: |
+      Builds a macOS .dmg with the app and an Applications shortcut, so users
+      drag the app into Applications. Uses hdiutil (built into macOS, no extra
+      deps). Run after `wails3 task package`. The DMG is named
+      Blink-<version>-<arch>.dmg from Info.plist + the build arch.
+
+      Usage:  wails3 task darwin:dmg
+    deps:
+      - task: package
+    cmds:
+      - task: create:dmg
+
+  create:dmg:
+    summary: Creates the .dmg from the packaged .app bundle
+    internal: true
+    vars:
+      # Product display name + version are read from Info.plist via plutil so the
+      # DMG filename tracks the real app version (e.g. Blink-0.1.0-arm64.dmg).
+      PRODUCT_NAME:
+        sh: plutil -extract CFBundleName raw -o - build/darwin/Info.plist
+      VERSION:
+        sh: plutil -extract CFBundleShortVersionString raw -o - build/darwin/Info.plist
+      ARCH: '{{ARCH}}'
+      DMG_NAME: '{{.PRODUCT_NAME}}-{{.VERSION}}-{{.ARCH}}.dmg'
+      STAGING: '{{.BIN_DIR}}/dmg-staging'
+    cmds:
+      # 1. Stage the .app + an Applications symlink in a folder.
+      - rm -rf "{{.STAGING}}"
+      - mkdir -p "{{.STAGING}}"
+      - cp -R "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.STAGING}}/"
+      - ln -s /Applications "{{.STAGING}}/Applications"
+      # 2. Create a read-write DMG from the staging folder.
+      - hdiutil create -volname "{{.PRODUCT_NAME}} {{.VERSION}}" -fs HFS+ -srcfolder "{{.STAGING}}" -ov -format UDRW "{{.BIN_DIR}}/{{.DMG_NAME}}.tmp.dmg"
+      # 3. Compact it to a read-only compressed DMG (UDZO) and clean up.
+      - hdiutil convert "{{.BIN_DIR}}/{{.DMG_NAME}}.tmp.dmg" -format UDZO -imagekey zlib-level=9 -o "{{.BIN_DIR}}/{{.DMG_NAME}}"
+      - rm -f "{{.BIN_DIR}}/{{.DMG_NAME}}.tmp.dmg"
+      - rm -rf "{{.STAGING}}"
+      - 'echo "Built {{.BIN_DIR}}/{{.DMG_NAME}}"'
