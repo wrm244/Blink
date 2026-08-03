@@ -53,3 +53,7 @@ func SetDockVisible(visible bool) {
 func Activate() {
 	C.pm_activate()
 }
+
+// ForceForeground 在 macOS 上为空操作：应用级的 Activate 已经把关键窗口
+// 带到前台，无需按窗口抢占（这是 Windows 前台锁定机制特有的需求）。
+func ForceForeground(hwnd uintptr) {}

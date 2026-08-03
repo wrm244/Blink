@@ -20,6 +20,17 @@ import * as breakengine$0 from "./internal/breakengine/models.js";
 import * as config$0 from "./internal/config/models.js";
 
 /**
+ * AckClose 由前端在收到 blink:close-request、确认弹窗已显示后立即调用，
+ * 用来停掉 Go 端的兜底定时器。
+ * 
+ * 拆成"接管 + 决定"两步，是为了让兜底超时只衡量前端的响应能力，
+ * 而不把用户对着弹窗思考的时间也算进去（详见 prefs_close.go）。
+ */
+export function AckClose(): $CancellablePromise<void> {
+    return $Call.ByID(799088405);
+}
+
+/**
  * CompleteOnboarding 标记引导完成并首次启动引擎。
  * 在用户完成首次设置界面后调用一次。
  */
@@ -60,6 +71,25 @@ export function PostponeBreak(): $CancellablePromise<void> {
  */
 export function Reset(): $CancellablePromise<void> {
     return $Call.ByID(702969893);
+}
+
+/**
+ * ResolveClose 接收前端关闭确认弹窗的结果，决定设置窗口关闭后的去向。
+ * 
+ * action 取 config.CloseActionBackground（保留在后台运行）、
+ * config.CloseActionQuit（完全退出）或 closeActionCancel（用户取消，
+ * 窗口保持打开）。remember 为 true 时把这次选择写入设置，之后关闭窗口
+ * 不再询问——用户可在"选项 → 关闭窗口时"改回每次询问。
+ * 
+ * 该流程目前只有 Windows 会触发（其它平台不安装关闭钩子，前端也就
+ * 收不到 blink:close-request 事件），但方法本身是平台无关的。
+ * 
+ * 线程：本方法是 Wails 绑定调用，运行在主线程上。窗口 Hide 与 app.Quit
+ * 内部都会 InvokeSync 回主线程，直接调用会死锁，因此实际动作必须甩到
+ * goroutine 上执行（与 ShowWindow 同理）。
+ */
+export function ResolveClose(action: string, remember: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2304484110, action, remember);
 }
 
 /**

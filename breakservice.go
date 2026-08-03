@@ -101,6 +101,55 @@ func (s *BreakService) Resume() { s.engine.Resume() }
 // Reset 清除长休息计数器并重新开始专注周期。
 func (s *BreakService) Reset() { s.engine.Reset() }
 
+// AckClose 由前端在收到 blink:close-request、确认弹窗已显示后立即调用，
+// 用来停掉 Go 端的兜底定时器。
+//
+// 拆成"接管 + 决定"两步，是为了让兜底超时只衡量前端的响应能力，
+// 而不把用户对着弹窗思考的时间也算进去（详见 prefs_close.go）。
+func (s *BreakService) AckClose() { ackCloseAsk() }
+
+// ResolveClose 接收前端关闭确认弹窗的结果，决定设置窗口关闭后的去向。
+//
+// action 取 config.CloseActionBackground（保留在后台运行）、
+// config.CloseActionQuit（完全退出）或 closeActionCancel（用户取消，
+// 窗口保持打开）。remember 为 true 时把这次选择写入设置，之后关闭窗口
+// 不再询问——用户可在"选项 → 关闭窗口时"改回每次询问。
+//
+// 该流程目前只有 Windows 会触发（其它平台不安装关闭钩子，前端也就
+// 收不到 blink:close-request 事件），但方法本身是平台无关的。
+//
+// 线程：本方法是 Wails 绑定调用，运行在主线程上。窗口 Hide 与 app.Quit
+// 内部都会 InvokeSync 回主线程，直接调用会死锁，因此实际动作必须甩到
+// goroutine 上执行（与 ShowWindow 同理）。
+func (s *BreakService) ResolveClose(action string, remember bool) error {
+	// 认领这次询问。若兜底逻辑已经先一步处理（前端回应超时），
+	// 这里就不能再动手，否则会和兜底重复执行。
+	if !finishCloseAsk() {
+		return nil
+	}
+	// 取消，以及任何无法识别的动作，都保持窗口原样——
+	// 对一个"关不掉窗口"的误操作来说，什么都不做是最安全的降级。
+	if action != config.CloseActionBackground && action != config.CloseActionQuit {
+		return nil
+	}
+	if remember {
+		settings := s.engine.GetSettings()
+		settings.CloseAction = action
+		if err := config.Save(settings); err != nil {
+			return err
+		}
+		s.engine.ApplySettings(settings)
+	}
+	go func() {
+		if action == config.CloseActionQuit {
+			quitApp()
+			return
+		}
+		hidePrefsWindow()
+	}()
+	return nil
+}
+
 // ShowWindow 显示设置窗口。由前端在数据加载完成、界面渲染就绪后调用，
 // 避免窗口先白屏再显示内容。Show/Focus 在独立 goroutine 上执行，
 // 因为它们内部通过 InvokeSync 调度到主线程，而本绑定方法本身就在

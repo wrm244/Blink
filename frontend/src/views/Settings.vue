@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Settings - 主设置视图。组合各 composable 和子组件。
+import CloseConfirmDialog from '@/components/CloseConfirmDialog.vue'
 import GButton from '@/components/GButton.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
 import GToggle from '@/components/GToggle.vue'
@@ -10,8 +11,9 @@ import AboutTab from '@/components/SettingsTabs/AboutTab.vue'
 import { setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
 import { Check, Clock, Coffee, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Sparkles, Sun, Timer } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Events } from '@wailsio/runtime'
 import { BreakService } from '@bindings/blink'
 import { useEngineState } from '@/composables/useEngineState'
 import { useCycleStatus } from '@/composables/useCycleStatus'
@@ -24,7 +26,31 @@ const tab = ref('timing')
 const collapsed = ref(false)
 
 // 引擎状态与控制
-const { s, state, dirty, saved, ready, touch, save, discard, completeOnboarding } = useEngineState()
+const { s, state, dirty, saved, ready, touch, save, discard, completeOnboarding, applyExternal } = useEngineState()
+
+// ---- 关闭确认弹窗（Windows）----
+// Go 端拦下窗口关闭后发来 blink:close-request，由这里弹窗询问；
+// 用户的选择通过 ResolveClose 回传，Go 端据此隐藏窗口或退出应用。
+// macOS 不安装关闭钩子，因此永远收不到该事件，弹窗也就不会出现。
+const closeAsk = ref(false)
+let offCloseAsk: (() => void) | undefined
+onMounted(() => {
+  offCloseAsk = Events.On('blink:close-request', () => {
+    closeAsk.value = true
+    // 立刻回执，停掉后端的兜底定时器——弹窗已经在用户眼前了，
+    // 接下来等多久都属于他的思考时间，不该被自动收场打断。
+    BreakService.AckClose()
+  })
+})
+onUnmounted(() => offCloseAsk?.())
+
+function resolveClose(action: 'background' | 'quit' | 'cancel', remember: boolean) {
+  closeAsk.value = false
+  // 后端在 remember 时会自己落盘，这里同步本地副本（含保存快照），
+  // 否则用户下次改别的设置一保存，就会把刚记住的选择覆盖回旧值。
+  if (remember && action !== 'cancel') applyExternal({ closeAction: action })
+  BreakService.ResolveClose(action, remember)
+}
 
 // 数据加载完成、界面渲染就绪后通知 Go 端显示窗口，避免白屏
 watch(ready, (v) => {
@@ -48,8 +74,8 @@ function startBreak() { BreakService.StartBreakNow() }
 function togglePause() { isPaused.value ? BreakService.Resume() : BreakService.Pause() }
 function reset() { BreakService.Reset() }
 
-// 设置布尔字段
-function setBool(field: keyof Settings, v: boolean) { (s as any)[field] = v; touch() }
+// 设置字段（布尔或字符串通用）
+function setBool(field: keyof Settings, v: boolean | string) { (s as any)[field] = v; touch() }
 
 // 主题选项
 const themeOptions = [
@@ -246,6 +272,9 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
         </div>
       </main>
     </div>
+
+    <!-- 关闭确认（Windows：Go 端拦截关闭后唤起） -->
+    <CloseConfirmDialog :open="closeAsk" @resolve="resolveClose" />
   </div>
 </template>
 

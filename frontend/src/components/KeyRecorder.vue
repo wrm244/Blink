@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // KeyRecorder - 快捷键录制组件。
-// 监听真实按键并发出 Wails 加速键字符串（如 "Cmd+Shift+B"）。
-// macOS 修饰键命名与 Wails accelerator.String() 的平台分支一致：
-// Cmd, Ctrl, Option, Shift。
+// 监听真实按键并发出 Wails 加速键字符串（如 macOS "Cmd+Shift+B" / Windows "Ctrl+Shift+B"）。
+// 修饰键命名按平台自适应（见 src/lib/platform.ts）：macOS 用 Cmd/Option，
+// Windows/Linux 用 Ctrl/Alt（与 Wails accelerator.String() 的平台分支一致）。
 import { Eraser, Keyboard } from '@lucide/vue'
 import { computed, onUnmounted, ref } from 'vue'
+import { MOD_NAMES, modifierTokensFrom } from '@/lib/platform'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -25,8 +26,6 @@ const emits = defineEmits<{ 'update:modelValue': [v: string] }>()
 
 const recording = ref(false)
 
-// 修饰键名称，按 Wails 序列化顺序排列
-const MOD_NAMES = ['Cmd', 'Ctrl', 'Option', 'Shift'] as const
 // 命名键集合
 const NAMED_KEYS = new Set([
   'backspace', 'tab', 'return', 'enter', 'escape', 'space', 'delete',
@@ -58,14 +57,9 @@ function normalizeKey(e: KeyboardEvent): string | null {
   return null
 }
 
-/** 从键盘事件中提取修饰键列表 */
+/** 从键盘事件中提取修饰键列表（按平台自适应命名） */
 function modsFrom(e: KeyboardEvent): string[] {
-  const mods: string[] = []
-  if (e.metaKey) mods.push('Cmd')
-  if (e.ctrlKey) mods.push('Ctrl')
-  if (e.altKey) mods.push('Option')
-  if (e.shiftKey) mods.push('Shift')
-  return mods
+  return modifierTokensFrom(e)
 }
 
 /** 录制中的 keydown 处理器 */

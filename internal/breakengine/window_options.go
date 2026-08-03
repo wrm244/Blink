@@ -35,6 +35,14 @@ func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
 			TitleBar:            application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
 			DisableShadow:       true,
 		},
+		// Windows：全屏遮罩是临时浮层，不应占用任务栏席位（HiddenOnTaskbar →
+		// WS_EX_TOOLWINDOW），也不要 OS 的圆角/阴影（DisableFramelessWindowDecorations），
+		// 否则铺满整屏时会露出亮边或黑色描边。覆盖任务栏靠 AlwaysOnTop（WS_EX_TOPMOST）
+		// 配合整屏 Bounds 实现。
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar:                 true,
+			DisableFramelessWindowDecorations: true,
+		},
 		CloseButtonState:      application.ButtonHidden,
 		MinimiseButtonState:   application.ButtonHidden,
 		MaximiseButtonState:   application.ButtonHidden,
@@ -73,6 +81,14 @@ func noticeOptions(a *application.App) application.WebviewWindowOptions {
 			Backdrop:    application.MacBackdropTranslucent,
 			WindowLevel: application.MacWindowLevelFloating,
 			TitleBar:    application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
+		},
+		// Windows：透明窗口走 WS_EX_NOREDIRECTIONBITMAP（DirectComposition），
+		// 仍正常接收鼠标事件，所以"推迟"按钮可用；不设置 IgnoreMouseEvents，
+		// 否则会加 WS_EX_TRANSPARENT 导致点击穿透。HiddenOnTaskbar 让提醒不出现在
+		// 任务栏；DisableFramelessWindowDecorations 去掉 OS 阴影/圆角，圆角交给 CSS。
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar:                 true,
+			DisableFramelessWindowDecorations: true,
 		},
 		CloseButtonState:      application.ButtonHidden,
 		MinimiseButtonState:   application.ButtonHidden,

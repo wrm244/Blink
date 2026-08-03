@@ -102,6 +102,7 @@ func buildTray() {
 	tray.SetLabel("Blink")
 	tray.SetTooltip("Blink")
 	tray.SetMenu(menu)
+	applyTrayPlatform(tray, menu)
 }
 
 // setMenuLanguage 为指定语言重建托盘菜单项标签。

@@ -64,6 +64,9 @@ func showPreferences() {
 	w.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 		platform.SetDockVisible(false)
 	})
+	// Windows：接管关闭按钮，改为询问是否保留在后台运行（详见
+	// prefs_close_windows.go）。其它平台是空操作。
+	installCloseHandler(w)
 	platform.SetDockVisible(true)
 	platform.Activate()
 }

@@ -42,6 +42,11 @@ func within(a, b, tol time.Duration) bool {
 func TestTickNormalGapDoesNotResetFocus(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
+	// 显式回拨 phaseEnd 表示已过 3 秒，而不是指望 startFocus 与 state()
+	// 两次调用之间的墙钟漂移。Windows 的单调时钟粒度约 0.5ms，两次紧邻的
+	// time.Now() 常常返回完全相同的值，导致 remaining 恰好等于完整时长；
+	// macOS 上亚微秒的漂移会让它掉到 full-1，测试才"碰巧"通过。
+	e.phaseEnd = e.phaseEnd.Add(-3 * time.Second)
 
 	phaseEndBefore := e.phaseEnd
 	e.tick(time.Now().Add(time.Second)) // 1s 间隔 <= sleepGap
@@ -105,8 +110,10 @@ func TestTickSleepGapDuringBreakEndsBreak(t *testing.T) {
 func TestPauseFreezesCountdownAcrossTicks(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
-	// 4s 间隔（<= sleepGap）是普通 tick；时间来自真实时钟，
-	// 所以 Pause 的 time.Until 看到相同的已过时间。
+	// 回拨 phaseEnd 表示已过 4 秒（同 TestTickNormalGapDoesNotResetFocus：
+	// 不能依赖墙钟在两次调用间自行推进，Windows 时钟粒度太粗）。
+	e.phaseEnd = e.phaseEnd.Add(-4 * time.Second)
+	// 4s 间隔（<= sleepGap）是普通 tick。
 	e.tick(time.Now().Add(4 * time.Second))
 	frozen := e.state().RemainingSec
 	if frozen >= int(e.focusDur()/time.Second) {

@@ -6,6 +6,18 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+// 关闭窗口时的可选行为，对应 Settings.CloseAction。
+const (
+	// CloseActionAsk 每次关闭窗口都弹确认框。
+	CloseActionAsk = "ask"
+	// CloseActionBackground 关闭窗口后保留在托盘继续计时。
+	CloseActionBackground = "background"
+	// CloseActionQuit 关闭窗口即退出应用。
+	CloseActionQuit = "quit"
 )
 
 // Settings 是全部用户可配置行为。
@@ -41,6 +53,14 @@ type Settings struct {
 	// Theme 是 UI 配色方案："system"（跟随系统）、"light" 或 "dark"。
 	Theme string `json:"theme"`
 
+	// CloseAction 决定关闭设置窗口时的行为，仅 Windows 使用：
+	//   "ask"        询问（默认）——弹出确认框让用户选择
+	//   "background" 直接最小化到托盘继续计时
+	//   "quit"       直接退出应用
+	//
+	// macOS 上关闭窗口天然保留在菜单栏，不读取此字段。
+	CloseAction string `json:"closeAction"`
+
 	// 全局键盘快捷键（Wails 加速键语法，如 "Cmd+Shift+B"）。
 	ShortcutStartBreak    string `json:"shortcutStartBreak"`
 	ShortcutSkipBreak     string `json:"shortcutSkipBreak"`
@@ -65,11 +85,46 @@ func Default() Settings {
 		Onboarded:             false,
 		Language:              "",
 		Theme:                 "system",
-		ShortcutStartBreak:    "Cmd+Shift+B",
-		ShortcutSkipBreak:     "Cmd+Shift+S",
-		ShortcutPostponeBreak: "Cmd+Shift+P",
-		ShortcutPreferences:   "Cmd+Shift+,",
+		CloseAction:           CloseActionAsk,
+		ShortcutStartBreak:    mod + "+Shift+B",
+		ShortcutSkipBreak:     mod + "+Shift+S",
+		ShortcutPostponeBreak: mod + "+Shift+P",
+		ShortcutPreferences:   mod + "+Shift+,",
 	}
+}
+
+// mod 是本平台主修饰键在 Wails 加速键语法中的名称。
+//
+// Wails 解析时把 "Cmd" 归一化为 CmdOrCtrl，因此 "Cmd+Shift+B" 在 Windows
+// 上确实能注册成 Ctrl+Shift+B——但设置界面会原样显示 "Cmd"，Windows 用户
+// 看到的是一个键盘上不存在的键。默认值直接按平台给出正确的字面量。
+var mod = func() string {
+	if runtime.GOOS == "darwin" {
+		return "Cmd"
+	}
+	return "Ctrl"
+}()
+
+// normalizeAccelerator 把 macOS 风格的修饰键名改写为本平台的名称。
+//
+// 场景：配置文件在平台间迁移，或早期版本在 Windows 上写入了 "Cmd+Shift+B"。
+// 这类值功能上可用（Cmd 会被解析成 CmdOrCtrl），但显示出来会误导用户，
+// 所以在加载时统一改写。仅替换修饰键 token，不触碰主键。
+func normalizeAccelerator(acc string) string {
+	if acc == "" || runtime.GOOS == "darwin" {
+		return acc
+	}
+	parts := strings.Split(acc, "+")
+	// 最后一段是主键（可能就是 "+" 本身导致的空串），只处理它之前的修饰键。
+	for i := 0; i < len(parts)-1; i++ {
+		switch strings.ToLower(strings.TrimSpace(parts[i])) {
+		case "cmd", "command", "cmdorctrl":
+			parts[i] = "Ctrl"
+		case "option":
+			parts[i] = "Alt"
+		}
+	}
+	return strings.Join(parts, "+")
 }
 
 // withDefaults 返回 s 中零值/无效值被替换为默认值后的设置。
@@ -105,6 +160,17 @@ func (s Settings) withDefaults() Settings {
 	}
 	if s.ShortcutPreferences == "" {
 		s.ShortcutPreferences = d.ShortcutPreferences
+	}
+	s.ShortcutStartBreak = normalizeAccelerator(s.ShortcutStartBreak)
+	s.ShortcutSkipBreak = normalizeAccelerator(s.ShortcutSkipBreak)
+	s.ShortcutPostponeBreak = normalizeAccelerator(s.ShortcutPostponeBreak)
+	s.ShortcutPreferences = normalizeAccelerator(s.ShortcutPreferences)
+	switch s.CloseAction {
+	case CloseActionAsk, CloseActionBackground, CloseActionQuit:
+		// 有效值，保留。
+	default:
+		// 空值（旧配置文件）或无法识别的值都退回默认的"询问"。
+		s.CloseAction = d.CloseAction
 	}
 	return s
 }

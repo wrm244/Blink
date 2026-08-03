@@ -55,6 +55,12 @@ func main() {
 			// 窗口关闭后继续运行--托盘即应用。
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+		Windows: application.WindowsOptions{
+			// 与 macOS 的 ApplicationShouldTerminateAfterLastWindowClosed:false 对应。
+			// 不设置的话，关闭设置窗口（唯一的常驻窗口）会直接结束进程，
+			// 托盘图标随之消失，计时器也停了——常驻后台的前提就没了。
+			DisableQuitOnLastWindowClosed: true,
+		},
 	})
 
 	buildTray()

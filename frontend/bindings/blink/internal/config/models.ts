@@ -72,6 +72,16 @@ export interface Settings {
     "theme": string;
 
     /**
+     * CloseAction 决定关闭设置窗口时的行为，仅 Windows 使用：
+     *   "ask"        询问（默认）——弹出确认框让用户选择
+     *   "background" 直接最小化到托盘继续计时
+     *   "quit"       直接退出应用
+     * 
+     * macOS 上关闭窗口天然保留在菜单栏，不读取此字段。
+     */
+    "closeAction": string;
+
+    /**
      * 全局键盘快捷键（Wails 加速键语法，如 "Cmd+Shift+B"）。
      */
     "shortcutStartBreak": string;

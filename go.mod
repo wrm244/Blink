@@ -2,7 +2,10 @@ module blink
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-beta.2
+require (
+	github.com/wailsapp/wails/v3 v3.0.0-beta.2
+	golang.org/x/sys v0.47.0
+)
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
@@ -12,5 +15,4 @@ require (
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 )

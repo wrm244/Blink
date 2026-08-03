@@ -40,6 +40,19 @@ export function useEngineState() {
     saved.value = true
   }
 
+  /**
+   * 同步后端已经写入的设置变更（并非用户在本页面编辑的结果）。
+   *
+   * 用于关闭确认弹窗这类"后端直接落盘"的路径：必须连同 savedSnapshot
+   * 一起更新，否则这里的 s 仍是旧值，用户之后改别的设置一保存，
+   * 就会把后端刚存好的值原样覆盖回去。也正因为它不是未保存的编辑，
+   * 不能置 dirty。
+   */
+  function applyExternal(patch: Partial<Settings>) {
+    Object.assign(s, patch)
+    if (savedSnapshot) savedSnapshot = { ...savedSnapshot, ...patch }
+  }
+
   /** 放弃更改，恢复到上次保存的快照 */
   function discard() {
     if (savedSnapshot) {
@@ -61,6 +74,6 @@ export function useEngineState() {
   return {
     s, state, dirty, saved, ready,
     savedSnapshot,
-    touch, save, discard, completeOnboarding,
+    touch, save, discard, completeOnboarding, applyExternal,
   }
 }
