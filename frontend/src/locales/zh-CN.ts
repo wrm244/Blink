@@ -94,7 +94,10 @@ export default {
     skipBreak: "跳过休息",
     postponeBreak: "推迟休息",
     preferences: "打开设置",
-    hint: "使用 Wails 快捷键语法，例如 {code}。",
+    prompt: "请按下组合键…",
+    clear: "清除",
+    conflict: "与“{action}”重复",
+    hint: "点击下方按钮，然后直接按下想使用的组合键。",
   },
   break: {
     shortLabel: "眼睛休息",

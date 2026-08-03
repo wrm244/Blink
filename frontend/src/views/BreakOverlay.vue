@@ -1,12 +1,75 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ChevronRight } from '@lucide/vue'
 import { Events } from '@wailsio/runtime'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/blink'
 import { Phase } from '../../bindings/blink/internal/breakengine/models'
-import { ChevronRight } from '@lucide/vue'
 
 const { t, locale } = useI18n()
+
+// ---- rest-screen content (quote + wallpaper) ----
+// Fetched from the free xygeng.cn open APIs when a break overlay appears. All
+// failures fall back silently to the plain slate backdrop so an offline app is
+// never worse than before. The day key keeps the Bing image cached per-calendar
+// day (a "today's picture" is pointless refetched a minute later), while the
+// quote is refetched each break so it feels fresh.
+const quote = ref('')
+const quoteMeta = ref('')
+const bgUrl = ref('')
+const dayKey = new Date().toISOString().slice(0, 10)
+
+function enrichRestScreen() {
+  fetchOne()
+  fetchBing()
+}
+
+async function fetchOne() {
+  try {
+    const res = await fetch('https://api.xygeng.cn/openapi/one')
+    if (!res.ok) return
+    const json = await res.json()
+    const content = json?.data?.content
+    if (typeof content !== 'string' || !content.trim()) return
+    quote.value = content.trim()
+    const origin = json.data.origin
+    const name = json.data.name
+    quoteMeta.value = [origin, name].filter(Boolean).join(' · ')
+  } catch {
+    /* offline — leave the plain backdrop */
+  }
+}
+
+async function fetchBing() {
+  try {
+    const cached = sessionStorage.getItem('pm:bing')
+    if (cached) {
+      const parsed = JSON.parse(cached)
+      if (parsed?.day === dayKey && typeof parsed.url === 'string') {
+        bgUrl.value = parsed.url
+        return
+      }
+    }
+    const res = await fetch('https://api.xygeng.cn/openapi/bing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: 0 }),
+    })
+    if (!res.ok) return
+    const json = await res.json()
+    const urls = json?.data?.urls
+    if (!Array.isArray(urls) || urls.length === 0) return
+    // urls is sorted highest-resolution first, so urls[0] is the 1920×1080
+    // variant — the "today's picture" at its best quality.
+    const url = urls[0]
+    try {
+      sessionStorage.setItem('pm:bing', JSON.stringify({ day: dayKey, url }))
+    } catch { /* storage full — cache is best-effort */ }
+    bgUrl.value = url
+  } catch {
+    /* offline — leave the plain backdrop */
+  }
+}
 
 // ---- break engine state (countdown) ----
 const phase = ref<string>('')
@@ -22,6 +85,11 @@ const now = ref(new Date())
 let clockTimer: ReturnType<typeof setTimeout> | undefined
 
 onMounted(async () => {
+  // --- rest-screen content (quote + wallpaper) ---
+  // Fire the network requests before the state binding so the break screen is
+  // populated as early as possible (and so a slow binding never delays them).
+  enrichRestScreen()
+
   // --- countdown ---
   const st = await BreakService.GetState()
   phase.value = st.phase
@@ -100,16 +168,34 @@ const dateFmt = computed(() => {
 })
 const datetime = computed(() => dateFmt.value.format(now.value))
 
+// The quote block only takes space once the quote has loaded, so the hero
+// countdown never jumps around as the request resolves.
+const hasQuote = computed(() => quote.value.length > 0)
+// date-style quotes (e.g. "腊月廿四：小年") are short and carry a leading
+// "：" — long aphorisms with an early colon must not be misdetected.
+const isDate = computed(() => {
+  const idx = quote.value.indexOf('：')
+  return idx > 0 && idx < 12 && quote.value.length < 40
+})
+
 function skip() { BreakService.SkipBreak() }
 </script>
 
 <template>
   <div class="overlay" :style="{ '--a': accent }">
+    <img v-if="bgUrl" :src="bgUrl" class="wallpaper" alt="" aria-hidden="true" />
+    <div class="scrim" aria-hidden="true" />
     <div class="vignette" aria-hidden="true" />
 
     <main class="content">
       <!-- Current date + time: secondary context at the top, very muted. -->
       <p class="datetime tabular-nums">{{ datetime }}</p>
+
+      <!-- One-quote: quiet inspiration, only rendered once loaded. -->
+      <div v-if="hasQuote" class="quote">
+        <p class="quote__text" :class="{ 'quote__text--date': isDate }">{{ quote }}</p>
+        <p v-if="quoteMeta" class="quote__meta">{{ quoteMeta }}</p>
+      </div>
 
       <p class="label">{{ label }}</p>
 
@@ -145,26 +231,61 @@ function skip() { BreakService.SkipBreak() }
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Slate gradient fallback — replaced by the wallpaper photo when it loads. */
   background: linear-gradient(160deg, #181a1d 0%, #1f2227 50%, #15171a 100%);
   color: #e8e6e1;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: default;
   overflow: hidden;
+}
+/* Belt-and-braces: never show a selection highlight over the photo. */
+.overlay ::selection {
+  background: transparent;
+}
+
+/* Bing "picture of the day" wallpaper: full-bleed cover behind everything. */
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  animation: pm-wallpaper-in 0.9s ease both;
+}
+@keyframes pm-wallpaper-in {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Dark scrim over the photo so the countdown text stays readable in any
+   lighting. Solid gradient, no blur (cheap, and the photo is already soft). */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(8, 10, 12, 0.66) 0%, rgba(8, 10, 12, 0.45) 42%, rgba(8, 10, 12, 0.72) 100%);
+  pointer-events: none;
 }
 
 /* Single soft vignette for visual focus on the center. */
 .vignette {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: radial-gradient(ellipse at center, transparent 58%, rgba(0,0,0,0.35) 100%);
   pointer-events: none;
 }
 
 .content {
   position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 36px;
+  gap: 26px;
   text-align: center;
   animation: pm-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -173,34 +294,74 @@ function skip() { BreakService.SkipBreak() }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Wall clock: smallest, faintest text — quiet context, not a focus point. */
+/* Wall clock: smallest text — quiet context, but bumped above the faintest
+   level since it now sits on a photo. */
 .datetime {
   margin: 0 0 -12px;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 15px;
+  font-weight: 500;
   letter-spacing: 0.02em;
-  color: rgba(232, 230, 225, 0.32);
+  color: rgba(240, 238, 233, 0.6);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Quote: max two lines, soft drop shadow so it stays legible over the photo.
+   date-style quotes (e.g. "腊月廿四：小年") get a slightly larger, calmer
+   treatment and drop the attribution line. */
+.quote {
+  max-width: min(680px, 82vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.quote__text {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: rgba(250, 248, 244, 0.94);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.65), 0 2px 20px rgba(0, 0, 0, 0.4);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.quote__text--date {
+  font-size: 22px;
+  font-weight: 500;
+}
+.quote__meta {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(240, 238, 233, 0.62);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
 }
 
 .label {
   margin: 0;
   letter-spacing: 0.42em;
   text-transform: uppercase;
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(232, 230, 225, 0.42);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(240, 238, 233, 0.72);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
   padding-left: 0.42em; /* offset for letter-spacing visual centering */
 }
 
-/* Hero clock — the dominant element. Thin weight keeps it calm despite the
-   size; tabular-nums prevents the digits from shifting each second. */
+/* Hero clock — the dominant element. Medium weight + soft shadow so the thin
+   numerals stay crisp over a photo; tabular-nums keeps digits from shifting. */
 .clock {
-  font-size: clamp(160px, 26vmin, 240px);
-  font-weight: 200;
+  font-size: clamp(140px, 22vmin, 210px);
+  font-weight: 400;
   line-height: 0.9;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
-  color: #f0eee9;
+  color: #f5f3ef;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 8px 40px rgba(0, 0, 0, 0.3);
 }
 
 /* Thin progress line beneath the clock. Track is barely visible; the fill is
@@ -225,9 +386,11 @@ function skip() { BreakService.SkipBreak() }
 .hint {
   margin: 0;
   max-width: 34ch;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.55;
-  color: rgba(232, 230, 225, 0.4);
+  color: rgba(240, 238, 233, 0.66);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
 /* Skip button: restrained glass pill, sits low and unobtrusive. */
@@ -245,6 +408,8 @@ function skip() { BreakService.SkipBreak() }
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   transition: background 0.2s ease, color 0.2s ease;
 }
 .skip:hover {

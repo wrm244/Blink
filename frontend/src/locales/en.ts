@@ -94,7 +94,10 @@ export default {
     skipBreak: "Skip break",
     postponeBreak: "Postpone break",
     preferences: "Show preferences",
-    hint: "Wails accelerator syntax, e.g. {code}.",
+    prompt: "Press a combination…",
+    clear: "Clear",
+    conflict: "Duplicate of “{action}”",
+    hint: "Click a field, then press the key combination you want to use.",
   },
   break: {
     shortLabel: "Eye break",

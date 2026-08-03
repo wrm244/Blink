@@ -3,10 +3,11 @@ import GButton from '@/components/GButton.vue'
 import GlassPanel from '@/components/GlassPanel.vue'
 import GTimeField from '@/components/GTimeField.vue'
 import GToggle from '@/components/GToggle.vue'
+import KeyRecorder from '@/components/KeyRecorder.vue'
 import { setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
 import { Events } from '@wailsio/runtime'
-import { Bell, Check, Clock, Coffee, Eye, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Settings as Settings2, Sparkles, Sun, Timer } from '@lucide/vue'
+import { Bell, Check, Clock, Coffee, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Settings as Settings2, Sparkles, Sun, Timer } from '@lucide/vue'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/blink'
@@ -311,6 +312,18 @@ const shortcutRows = computed(() => [
   { key: 'shortcutPreferences' as const, label: t('shortcuts.preferences'), icon: Settings2, value: s.shortcutPreferences, placeholder: 'Cmd+Shift+,' },
 ])
 
+// Map an accelerator to the label of whichever row already claims it, so a
+// duplicate shortcut is called out instead of silently stealing the binding.
+function conflictFor(key: keyof Settings): string | null {
+  const acc = (s as any)[key] as string | undefined
+  if (!acc) return null
+  for (const row of shortcutRows.value) {
+    if (row.key === key) continue
+    if (row.value === acc) return row.label
+  }
+  return null
+}
+
 // Save bar is relevant only on tabs that actually edit settings.
 const editTabs = ['timing', 'options', 'shortcuts']
 const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.value))
@@ -393,10 +406,10 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
       <!-- MAIN (right) -->
       <main class="main">
         <!-- HERO (fixed header) -->
-        <GlassPanel strong class="hero" :class="{ 'hero--break': isBreak, 'hero--paused': isPaused }">
+        <GlassPanel strong class="hero">
           <div class="hero__top">
             <div class="hero__brand">
-              <div class="hero__logo"><Eye class="size-5" /></div>
+              <div class="hero__logo"><img class="hero__logo-img" src="/logo.png" alt="Blink" /></div>
               <div>
                 <h1 class="hero__title">{{ t('app.name') }}</h1>
                 <p class="hero__sub">
@@ -527,22 +540,27 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
             <!-- SHORTCUTS -->
             <section v-show="tab === 'shortcuts'" class="panel-stack">
               <GlassPanel v-for="row in shortcutRows" :key="row.key" class="shortcut-row">
-                <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
-                <input
-                  class="keycap"
-                  :value="row.value"
+                <div class="shortcut-row__left">
+                  <span class="shortcut-row__label"><component :is="row.icon" class="size-4" />{{ row.label }}</span>
+                  <span v-if="conflictFor(row.key)" class="shortcut-row__conflict">{{ t('shortcuts.conflict', { action: conflictFor(row.key) }) }}</span>
+                </div>
+                <KeyRecorder
+                  :model-value="row.value"
                   :placeholder="row.placeholder"
-                  @input="(e) => { (s as any)[row.key] = (e.target as HTMLInputElement).value; touch() }"
+                  :prompt="t('shortcuts.prompt')"
+                  :clear-title="t('shortcuts.clear')"
+                  :conflict="!!conflictFor(row.key)"
+                  @update:model-value="(v: string) => { (s as any)[row.key] = v; touch() }"
                 />
               </GlassPanel>
-              <p class="hint">{{ t('shortcuts.hint', { code: 'Cmd+Shift+B' }) }}</p>
+              <p class="hint">{{ t('shortcuts.hint') }}</p>
             </section>
 
             <!-- ABOUT -->
             <section v-show="tab === 'about'" class="panel-stack">
               <GlassPanel class="about">
                 <div class="about__head">
-                  <div class="about__logo"><Eye class="size-6" /></div>
+                  <div class="about__logo"><img class="about__logo-img" src="/logo.png" alt="Blink" /></div>
                   <div>
                     <div class="about__name">{{ t('app.name') }}</div>
                     <div class="about__ver">{{ t('about.version') }} 0.1.0</div>
@@ -757,17 +775,19 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 }
 
 .hero { padding: 20px 24px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
-.hero--break :deep(.hero__logo) { background: rgba(91, 138, 111, 0.16) !important; color: var(--phase-break) !important; }
-.hero--paused :deep(.hero__logo) { background: rgba(154, 162, 177, 0.18) !important; color: var(--text-muted) !important; }
 .hero__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .hero__brand { display: flex; gap: 12px; align-items: center; }
+/* Logo tile: the white logo needs a dark slate backdrop to stay visible in both
+   themes — this is how the site's dark hero shows it, with no extra styling. */
 .hero__logo {
   width: 42px; height: 42px;
   display: grid; place-items: center;
   border-radius: 13px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  transition: background 0.2s, color 0.2s;
+  background: #1b1e23;
+}
+.hero__logo-img {
+  width: 26px; height: 26px;
+  object-fit: contain;
 }
 .hero__title { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
 .hero__sub { margin: 3px 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
@@ -896,27 +916,24 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 
 /* ---- shortcuts ---- */
 .shortcut-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 13px 20px; }
+.shortcut-row__left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .shortcut-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
-.keycap {
-  width: 160px;
-  text-align: center;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  color: var(--text);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.keycap:focus { border-color: var(--accent); }
+.shortcut-row__conflict { font-size: 11.5px; color: var(--phase-prebreak); }
 .hint { font-size: 12px; color: var(--text-faint); padding: 4px 6px; }
 
 /* ---- about ---- */
 .about { padding: 24px; }
 .about__head { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
-.about__logo { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 13px; background: var(--accent-soft); color: var(--accent); }
+.about__logo {
+  width: 46px; height: 46px;
+  display: grid; place-items: center;
+  border-radius: 13px;
+  background: #1b1e23;
+}
+.about__logo-img {
+  width: 30px; height: 30px;
+  object-fit: contain;
+}
 .about__name { font-size: 18px; font-weight: 600; }
 .about__ver { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .about__desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 16px; }
