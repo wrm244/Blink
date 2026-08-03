@@ -2,9 +2,9 @@
 
 package platform
 
-// SetDockVisible is a no-op off macOS: other platforms always show a taskbar
-// entry for a visible window, so there is no activation policy to toggle.
+// SetDockVisible 在非 macOS 平台上为空操作：其它平台始终为可见窗口
+// 显示任务栏条目，没有激活策略可切换。
 func SetDockVisible(visible bool) {}
 
-// Activate is a no-op off macOS.
+// Activate 在非 macOS 平台上为空操作。
 func Activate() {}

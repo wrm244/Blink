@@ -1,7 +1,6 @@
-// Package breakengine contains the timer state machine at the heart of
-// Blink: it cycles through focus, pre-break warning and (short or long)
-// break phases, pauses on user idle, survives system sleep, and drives the
-// on-screen break overlays.
+// Package breakengine 包含 Blink 的核心计时状态机：
+// 在专注（focus）→ 休息前提醒（pre-break）→ 短休息/长休息之间循环，
+// 用户空闲时自动暂停，系统休眠后恢复，并驱动全屏休息遮罩窗口。
 package breakengine
 
 import (
@@ -18,39 +17,37 @@ import (
 const (
 	eventTick = "blink:tick"
 
-	// Built-in macOS system sounds: a soft chime when a break ends and a
-	// gentle tick when the pre-break warning appears.
+	// 内置 macOS 系统音效：休息结束时播放柔和提示音，
+	// 休息前提醒出现时播放轻柔的滴答声。
 	soundBreakEnd = "Glass"
 	soundPreBreak = "Tink"
 
-	tickInterval      = 1 * time.Second
-	idleCheckInterval = 5 * time.Second
-	// sleepGap: if two ticks are farther apart than this the machine likely
-	// slept; rather than fire a stale break we reset the focus period.
+	tickInterval      = 1 * time.Second  // 每秒滴答一次
+	idleCheckInterval = 5 * time.Second   // 每 5 秒检查一次空闲状态
+	// sleepGap：如果两次 tick 之间间隔超过此值，说明机器可能休眠了；
+	// 与其触发一个过期的休息，不如重置专注周期。
 	sleepGap = 5 * time.Second
 )
 
-// Engine is the break-reminder state machine. It is safe for concurrent use:
-// every exported method takes the mutex, and the background ticker is the only
-// other writer.
+// Engine 是休息提醒的状态机。它是并发安全的：
+// 每个导出方法都获取互斥锁，后台 ticker 是唯一的其它写入者。
 type Engine struct {
 	mu       sync.Mutex
 	settings config.Settings
 
 	phase    Phase
-	phaseEnd time.Time // absolute time at which the current phase ends
+	phaseEnd time.Time // 当前阶段的绝对结束时间
 	total    time.Duration
 
-	// breaksDone counts short breaks completed since the last long break.
+	// breaksDone 记录自上次长休息以来完成的短休息次数。
 	breaksDone int
 
 	idle   bool
 	paused bool
-	// pausedRemaining lets Pause/Resume freeze the countdown without the clock
-	// running underneath them.
+	// pausedRemaining 让 Pause/Resume 在不依赖时钟运行的情况下冻结倒计时。
 	pausedRemaining time.Duration
 
-	// lastTick is used to detect system sleep (a suddenly large gap).
+	// lastTick 用于检测系统休眠（突然出现的大间隔）。
 	lastTick time.Time
 
 	app      *application.App
@@ -62,13 +59,13 @@ type Engine struct {
 	started bool
 }
 
-// New creates an engine bound to the given settings.
+// New 根据给定设置创建引擎。
 func New(s config.Settings) *Engine {
 	return &Engine{settings: s}
 }
 
-// Start launches the background ticker and idle checker. It is idempotent so
-// it is safe to call from a service's ServiceStartup hook.
+// Start 启动后台 ticker 和空闲检测器。该方法是幂等的，
+// 因此从服务的 ServiceStartup 钩子中调用是安全的。
 func (e *Engine) Start() {
 	e.mu.Lock()
 	if e.started {
@@ -81,7 +78,7 @@ func (e *Engine) Start() {
 	e.app = application.Get()
 	now := time.Now()
 	e.lastTick = now
-	e.startFocus(now)
+	e.startFocus()
 	e.mu.Unlock()
 
 	go e.loop()
@@ -89,14 +86,14 @@ func (e *Engine) Start() {
 	go e.windowLoop()
 }
 
-// IsStarted reports whether the engine's background ticker is running.
+// IsStarted 报告引擎的后台 ticker 是否正在运行。
 func (e *Engine) IsStarted() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.started
 }
 
-// Stop halts the background goroutines. The engine can be restarted with Start.
+// Stop 停止后台 goroutine。可以通过 Start 重新启动。
 func (e *Engine) Stop() {
 	e.mu.Lock()
 	if !e.started {
@@ -104,23 +101,23 @@ func (e *Engine) Stop() {
 		return
 	}
 	e.started = false
-	// Enqueue the hide commands BEFORE closing stopCh so windowLoop has a
-	// chance to drain them (see windowLoop) before it exits. Closing stopCh
-	// first would let windowLoop return immediately, leaving overlays on
-	// screen.
+	// 在关闭 stopCh 之前先入队隐藏命令，这样 windowLoop 有机会
+	// 在退出前处理它们（参见 windowLoop），否则 windowLoop 可能在
+	// 隐藏命令执行前就返回，导致遮罩窗口残留在屏幕上。
 	e.hideNotice()
 	e.hideOverlays()
 	close(e.stopCh)
 	e.mu.Unlock()
 }
 
-// app_ returns the cached Wails app, set once at Start time.
+// app_ 返回缓存的 Wails 应用实例，在 Start 时设置。
 func (e *Engine) app_() *application.App {
 	return e.app
 }
 
-// ---- state ----
+// ---- 状态快照 ----
 
+// state 生成当前引擎状态的快照。调用者需持有互斥锁。
 func (e *Engine) state() State {
 	st := State{Phase: e.phase, Idle: e.idle, Paused: e.paused, ShortBreakCount: e.breaksDone}
 	if e.settings.EnableLongBreaks {
@@ -131,9 +128,8 @@ func (e *Engine) state() State {
 	}
 	total := e.total
 	remaining := total
-	// Idle and paused phases freeze the countdown: skip the phaseEnd lookup so
-	// remaining stays at total without the per-second phaseEnd rewrite the
-	// tick loop used to do.
+	// 空闲和暂停阶段冻结倒计时：跳过 phaseEnd 查询，
+	// 让 remaining 保持在 total。
 	if !e.phaseEnd.IsZero() && e.phase != PhaseIdle {
 		remaining = time.Until(e.phaseEnd)
 	}
@@ -148,6 +144,7 @@ func (e *Engine) state() State {
 	return st
 }
 
+// emit 向前端发送 tick 事件。调用者需持有互斥锁。
 func (e *Engine) emit() {
 	a := e.app_()
 	if a == nil {
@@ -156,148 +153,7 @@ func (e *Engine) emit() {
 	a.Event.Emit(eventTick, e.state())
 }
 
-// ---- durations ----
-
-func (e *Engine) focusDur() time.Duration {
-	return time.Duration(e.settings.FocusDurationMin) * time.Minute
-}
-func (e *Engine) shortDur() time.Duration {
-	return time.Duration(e.settings.ShortBreakDurationSec) * time.Second
-}
-func (e *Engine) longDur() time.Duration {
-	return time.Duration(e.settings.LongBreakDurationMin) * time.Minute
-}
-func (e *Engine) preDur() time.Duration {
-	return time.Duration(e.settings.PreBreakWarningSec) * time.Second
-}
-
-func (e *Engine) shouldLong() bool {
-	return e.settings.EnableLongBreaks && e.breaksDone >= e.settings.LongBreakInterval
-}
-
-// ---- transitions (caller holds e.mu) ----
-
-func (e *Engine) setPhase(p Phase, dur time.Duration) {
-	e.phase = p
-	e.total = dur
-	e.phaseEnd = time.Now().Add(dur)
-	e.paused = false
-	e.pausedRemaining = 0
-}
-
-func (e *Engine) startFocus(_ time.Time) {
-	e.setPhase(PhaseFocusing, e.focusDur())
-	e.hideNotice()
-	e.hideOverlays()
-	e.emit()
-}
-
-func (e *Engine) startPreBreak() {
-	dur := e.preDur()
-	e.setPhase(PhasePreBreak, dur)
-	e.showNotice()
-	if e.settings.SoundEnabled {
-		platform.PlaySound(soundPreBreak)
-	}
-	e.emit()
-}
-
-func (e *Engine) startBreak() {
-	long := e.shouldLong()
-	dur := e.shortDur()
-	phase := PhaseShortBreak
-	if long {
-		dur = e.longDur()
-		phase = PhaseLongBreak
-	}
-	e.setPhase(phase, dur)
-	log.Printf("blink/breakengine: break started: phase=%s duration=%s (long=%v, breaksDone=%d)", phase, dur, long, e.breaksDone)
-	e.hideNotice()
-	e.showOverlays()
-	e.emit()
-}
-
-func (e *Engine) endBreak() {
-	ended := e.phase
-	switch ended {
-	case PhaseLongBreak:
-		e.breaksDone = 0
-	case PhaseShortBreak:
-		e.breaksDone++
-	}
-	log.Printf("blink/breakengine: break ended: phase=%s breaksDone=%d, restarting focus", ended, e.breaksDone)
-	if e.settings.SoundEnabled {
-		platform.PlaySound(soundBreakEnd)
-	}
-	e.startFocus(time.Now())
-}
-
-// tick advances the state machine by one second. Caller holds e.mu.
-func (e *Engine) tick(now time.Time) {
-	if e.paused {
-		// Keep lastTick fresh while paused so a long pause does not look like
-		// system sleep on the next active tick (which would reset the focus
-		// period and silently drop the user's Resume). No emit: the state is
-		// frozen (Pause/Resume emit on the actual transition).
-		e.lastTick = now
-		return
-	}
-
-	// Detect system sleep: a large gap between ticks means the machine was
-	// suspended. Reset rather than firing a break that became overdue while
-	// asleep.
-	gap := now.Sub(e.lastTick)
-	e.lastTick = now
-	if gap > sleepGap {
-		log.Printf("blink/breakengine: sleep gap detected: gap=%s > sleepGap=%s, resetting phase=%s", gap, sleepGap, e.phase)
-		if e.phase.IsBreak() {
-			e.endBreak()
-		} else {
-			e.startFocus(now)
-		}
-		return
-	}
-
-	// Idle handling only affects the focus period: while the user is away the
-	// focus countdown is held at full so they get a fresh period on return.
-	// idleLoop transitions focus -> PhaseIdle when the idle threshold is hit,
-	// and emits on the transition, so there is nothing to do here each second.
-	if e.phase == PhaseIdle {
-		return
-	}
-
-	if e.phaseEnd.IsZero() {
-		return
-	}
-
-	remaining := e.phaseEnd.Sub(now)
-	switch e.phase {
-	case PhaseFocusing:
-		if e.preDur() > 0 && remaining <= e.preDur() {
-			e.startPreBreak()
-		} else if remaining <= 0 {
-			e.startBreak()
-		} else {
-			e.emit()
-		}
-	case PhasePreBreak:
-		if remaining <= 0 {
-			e.startBreak()
-		} else {
-			e.emit()
-		}
-	case PhaseShortBreak, PhaseLongBreak:
-		if remaining <= 0 {
-			e.endBreak()
-		} else {
-			e.emit()
-		}
-	default:
-		e.emit()
-	}
-}
-
-// loop is the per-second driver.
+// loop 是每秒驱动一次的主循环。
 func (e *Engine) loop() {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
@@ -313,9 +169,9 @@ func (e *Engine) loop() {
 	}
 }
 
-// idleLoop periodically samples system idle time and, when the user has been
-// inactive past the threshold, marks the engine idle (which holds/resets the
-// focus timer). Activity clears the flag and starts a fresh focus period.
+// idleLoop 定期采样系统空闲时间，当用户不活动超过阈值时
+// 标记引擎为空闲状态（保持/重置专注计时器）。活动恢复时
+// 清除标记并开始新的专注周期。
 func (e *Engine) idleLoop() {
 	ticker := time.NewTicker(idleCheckInterval)
 	defer ticker.Stop()
@@ -330,14 +186,13 @@ func (e *Engine) idleLoop() {
 			wasIdle := e.idle
 			if idle >= threshold {
 				e.idle = true
-				// Only idle-pause the focus workflow; never interrupt a break,
-				// and leave an explicit user pause alone. The check is against
-				// e.paused (the live boolean) rather than a phase value because
-				// Pause() freezes the countdown in place without changing the
-				// phase, so a paused engine still reports PhaseFocusing here.
+				// 仅对专注流程执行空闲暂停；不打断正在进行的休息，
+				// 也不影响用户手动暂停。检查 e.paused（实时布尔值）
+				// 而非阶段值，因为 Pause() 在不改变阶段的情况下冻结倒计时，
+				// 所以暂停的引擎在这里仍然报告 PhaseFocusing。
 				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
 					e.phase = PhaseIdle
-					log.Printf("blink/breakengine: idle threshold reached (%s), holding focus timer at full", threshold)
+					log.Printf("blink/breakengine: 空闲阈值达到（%s），专注计时器保持满值", threshold)
 					e.hideNotice()
 					e.hideOverlays()
 					e.emit()
@@ -345,135 +200,11 @@ func (e *Engine) idleLoop() {
 			} else {
 				e.idle = false
 				if wasIdle && e.phase == PhaseIdle {
-					log.Printf("blink/breakengine: activity resumed, restarting focus period")
-					e.startFocus(time.Now())
+					log.Printf("blink/breakengine: 活动恢复，重新开始专注周期")
+					e.startFocus()
 				}
 			}
 			e.mu.Unlock()
 		}
 	}
-}
-
-// ---- public controls (frontend-callable via the service) ----
-
-// GetState returns a snapshot of the current engine state.
-func (e *Engine) GetState() State {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.state()
-}
-
-// GetSettings returns the current settings.
-func (e *Engine) GetSettings() config.Settings {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.settings
-}
-
-// ApplySettings updates the running engine's settings. A change to the focus
-// duration takes effect immediately by restarting the current focus period;
-// an in-progress break is left to finish naturally. A user-initiated pause is
-// preserved: the new durations apply on the next focus period after Resume.
-//
-// Only a FocusDurationMin change restarts the period: it is the one setting
-// that determines the current phase's end time, so anything else (theme,
-// language, sound, shortcuts, break lengths) must not wipe the user's
-// in-progress focus. PreBreakWarningSec needs no restart either — the tick
-// loop reads it live each second when deciding when to warn.
-func (e *Engine) ApplySettings(s config.Settings) {
-	e.mu.Lock()
-	focusChanged := s.FocusDurationMin != e.settings.FocusDurationMin
-	e.settings = s
-	if focusChanged && !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak) {
-		// startFocus emits on its own; no extra emit needed here.
-		e.startFocus(time.Now())
-	} else {
-		// Break in progress, user paused, or no timing change: just notify the
-		// frontend that settings (e.g. BreaksUntilLong) may have changed.
-		e.emit()
-	}
-	e.mu.Unlock()
-}
-
-// StartBreakNow forces a break to begin immediately, skipping the pre-break
-// warning. If a break is already in progress this is a no-op.
-func (e *Engine) StartBreakNow() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.phase.IsBreak() {
-		return
-	}
-	e.startBreak()
-}
-
-// SkipBreak ends the current break (or pre-break warning) and returns to a
-// fresh focus period. No-op when not on a break.
-func (e *Engine) SkipBreak() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.phase.IsBreak() || e.phase == PhasePreBreak {
-		e.endBreak()
-	}
-}
-
-// PostponeBreak cancels the current or upcoming break and restarts the focus
-// period at full duration, effectively delaying the next break.
-func (e *Engine) PostponeBreak() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.phase.IsBreak() || e.phase == PhasePreBreak {
-		e.endBreak()
-	} else {
-		e.startFocus(time.Now())
-	}
-}
-
-// Pause freezes the countdown. The phase is recorded so Resume can restore it.
-func (e *Engine) Pause() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.paused {
-		return
-	}
-	if e.phase == PhaseIdle {
-		// Already effectively paused by inactivity.
-		return
-	}
-	remaining := time.Until(e.phaseEnd)
-	if remaining < 0 {
-		remaining = 0
-	}
-	e.pausedRemaining = remaining
-	e.paused = true
-	log.Printf("blink/breakengine: pause: phase=%s remaining=%s", e.phase, remaining)
-	e.emit()
-}
-
-// Resume continues a paused countdown from where it froze. It also restarts
-// the focus period when the engine is idle (paused on inactivity), so a user
-// can manually "resume" without waiting to move the mouse.
-func (e *Engine) Resume() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.phase == PhaseIdle {
-		e.idle = false
-		e.startFocus(time.Now())
-		return
-	}
-	if !e.paused {
-		return
-	}
-	e.paused = false
-	e.phaseEnd = time.Now().Add(e.pausedRemaining)
-	e.pausedRemaining = 0
-	log.Printf("blink/breakengine: resume: phase=%s remaining=%s", e.phase, e.phaseEnd.Sub(time.Now()))
-	e.emit()
-}
-
-// Reset clears the long-break counter and starts a fresh focus period.
-func (e *Engine) Reset() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.breaksDone = 0
-	e.startFocus(time.Now())
 }

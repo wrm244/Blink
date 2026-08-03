@@ -10,9 +10,8 @@ package platform
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 
-// pm_play_sound plays one of the built-in macOS system sounds by name (e.g.
-// "Glass", "Tink"). Returns 1 if a sound with that name was found, 0 otherwise.
-// It plays asynchronously so it never blocks the caller.
+// pm_play_sound 按名称播放内置 macOS 系统音效（如 "Glass"、"Tink"）。
+// 找到对应名称的音效返回 1，否则返回 0。异步播放，永不阻塞调用者。
 static int pm_play_sound(const char *name) {
     @autoreleasepool {
         NSString *n = [NSString stringWithUTF8String:name];
@@ -29,9 +28,8 @@ import "C"
 
 import "unsafe"
 
-// PlaySound plays the named macOS system sound. If the name is unknown to the
-// system nothing happens. The call returns immediately; the sound plays in
-// the background.
+// PlaySound 播放指定名称的 macOS 系统音效。
+// 如果名称未知则不做任何操作。调用立即返回；音效在后台播放。
 func PlaySound(name string) {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))

@@ -1,13 +1,13 @@
-// Theme controller: applies a light/dark/system colour scheme to the document
-// and keeps "system" in sync with the OS appearance.
+// 主题控制器：为文档应用浅色/深色/系统配色方案，
+// 并在"系统"模式下实时跟随 OS 外观变化。
 
 export type Theme = "system" | "light" | "dark"
 
 let media: MediaQueryList | null = null
 let systemListener: (() => void) | null = null
 
-// resolvedTheme returns the concrete appearance ("light" | "dark") for a theme
-// preference, resolving "system" against the OS preference.
+// resolvedTheme 返回主题偏好对应的具体外观（"light" | "dark"），
+// 将"system"解析为 OS 偏好。
 function resolvedTheme(theme: Theme): "light" | "dark" {
   if (theme === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
@@ -15,17 +15,16 @@ function resolvedTheme(theme: Theme): "light" | "dark" {
   return theme
 }
 
-// applyTheme toggles the `dark` class on <html> to switch the CSS variable set,
-// and (for "system") subscribes to OS appearance changes so the app follows the
-// system in real time.
+// applyTheme 切换 <html> 上的 `dark` 类以切换 CSS 变量集，
+// 并在"system"模式下订阅 OS 外观变化以实时跟随系统。
 export function applyTheme(theme: Theme) {
-  // Normalise: empty/unknown values fall back to "system".
+  // 规范化：空/未知值回退到 "system"
   const t: Theme = theme === "light" || theme === "dark" ? theme : "system"
 
   const resolved = resolvedTheme(t)
   document.documentElement.classList.toggle("dark", resolved === "dark")
 
-  // Rebind the system listener only when following the system.
+  // 仅在跟随系统时重新绑定监听器
   if (media && systemListener) {
     media.removeEventListener("change", systemListener)
     media = null
@@ -40,8 +39,8 @@ export function applyTheme(theme: Theme) {
   localStorage.setItem("pm:theme", t)
 }
 
-// initTheme applies the last-used theme early at startup (before the settings
-// load), to avoid a flash of the wrong theme.
+// initTheme 在启动早期（设置加载前）应用上次使用的主题，
+// 避免错误主题的闪烁。
 export function initTheme() {
   const saved = (localStorage.getItem("pm:theme") as Theme | null) ?? "system"
   applyTheme(saved)

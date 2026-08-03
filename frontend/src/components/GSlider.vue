@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// GSlider - 滑块组件，基于 reka-ui 的 SliderRoot 封装。
 import { computed } from 'vue'
 import { SliderRoot, SliderTrack, SliderRange, SliderThumb } from 'reka-ui'
 import { cn } from '@/lib/utils'
@@ -13,7 +14,7 @@ const props = defineProps<{
 }>()
 const emits = defineEmits<{ 'update:modelValue': [value: number] }>()
 
-// reka-ui SliderRoot uses a number[] model; surface a plain number instead.
+// reka-ui SliderRoot 使用 number[] 模型；此处对外暴露普通 number
 const arr = computed({
   get: () => (props.modelValue != null ? [props.modelValue] : [props.min ?? 0]),
   set: (v: number[]) => emits('update:modelValue', v[0] ?? 0),

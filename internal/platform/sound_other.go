@@ -2,5 +2,5 @@
 
 package platform
 
-// PlaySound is a no-op on platforms without a native sound API.
+// PlaySound 在没有原生音效 API 的平台上为空操作。
 func PlaySound(name string) {}

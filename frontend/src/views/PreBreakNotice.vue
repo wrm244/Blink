@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/blink'
+import { BreakService } from '@bindings/blink'
 
 const { t } = useI18n()
 const remaining = ref(0)
@@ -23,26 +23,25 @@ function postpone() { BreakService.PostponeBreak() }
 <template>
   <div class="notice-wrap">
     <div class="notice">
-      <!-- Left accent bar: visual anchor in the macOS notification spirit,
-           tinted with the prebreak phase colour. Replaces the old pulsing
-           dot + box-shadow which read as a heavy "card" element. -->
+      <!-- 左侧强调条：macOS 通知风格的视觉锚点，
+           使用休息前阶段色。替代了旧的脉冲圆点 + 阴影方块。 -->
       <div class="accent" aria-hidden="true" />
 
-      <!-- Countdown is the hero: large thin numerals (matching the break
-           overlay's typography), unit tucked alongside as quiet context. -->
+      <!-- 倒计时是核心：大号细数字（与休息遮罩排版一致），
+           单位作为安静上下文紧跟旁边。 -->
       <div class="countdown tabular-nums">
         <span class="num">{{ remaining }}</span>
         <span class="unit">{{ t('notice.secondsShort') }}</span>
       </div>
 
-      <!-- Heading + sub: plain text, no card-like backing. -->
+      <!-- 标题 + 副标题：纯文本，无卡片背板。 -->
       <div class="body">
         <div class="title">{{ t('notice.title') }}</div>
         <div class="sub">{{ t('notice.sub') }}</div>
       </div>
 
-      <!-- Postpone: ghost-style text button. No glass card, no border —
-           just a quiet affordance that warms on hover. -->
+      <!-- 推迟：幽灵式文字按钮。无玻璃卡片、无边框 -
+           仅一个悬停时变暖的安静交互。 -->
       <button class="postpone" @click="postpone">
         {{ t('notice.postpone') }}
       </button>
@@ -52,13 +51,11 @@ function postpone() { BreakService.PostponeBreak() }
 
 <style scoped>
 /*
- * Pre-break notice — a slim heads-up that slides in at the top of the primary
- * display ~10s before a break begins. The window itself is transparent with
- * macOS native translucency (see windows.go noticeOptions), so the .notice
- * shell only adds a faint tint + hairline border to seat the content on top
- * of the system's vibrancy. No backdrop-filter here: layering CSS blur on top
- * of the window's native blur is what made the old version feel like a heavy
- * card pasted onto the desktop.
+ * 休息前提醒 - 休息开始前约 10 秒在主显示器顶部滑入的纤细提示。
+ * 窗口本身透明，使用 macOS 原生半透明效果（见 windows.go noticeOptions），
+ * 所以 .notice 外壳仅添加淡色底 + 发丝边框，将内容置于系统毛玻璃之上。
+ * 此处不用 backdrop-filter：在窗口原生模糊上叠加 CSS 模糊
+ * 会让旧版看起来像贴在桌面上的厚重卡片。
  */
 .notice-wrap {
   width: 100%;
@@ -83,9 +80,8 @@ function postpone() { BreakService.PostponeBreak() }
   animation: pm-fade-up 0.35s ease both;
 }
 
-/* Accent bar: 3px vertical strip hugging the left edge. Uses the prebreak
-   phase colour so the notice reads as a warning without resorting to a loud
-   icon or animated dot. */
+/* 强调条：3px 竖条紧贴左边缘。使用休息前阶段色，
+   让提醒读起来像警告而非响亮图标或动画圆点。 */
 .accent {
   width: 3px;
   height: 100%;
@@ -93,8 +89,8 @@ function postpone() { BreakService.PostponeBreak() }
   flex-shrink: 0;
 }
 
-/* Countdown cluster: number + unit, baseline-aligned. The number matches the
-   break overlay's thin-weight aesthetic so the two screens feel related. */
+/* 倒计时簇：数字 + 单位，基线对齐。数字与休息遮罩的细字重美学一致，
+   让两个屏幕感觉相关。 */
 .countdown {
   display: flex;
   align-items: baseline;
@@ -135,9 +131,8 @@ function postpone() { BreakService.PostponeBreak() }
   white-space: nowrap;
 }
 
-/* Postpone button: ghost text button. No glass card, no border — just a
-   quiet affordance that warms on hover. Matches the restrained pill on the
-   break overlay rather than the old GButton glass variant. */
+/* 推迟按钮：幽灵文字按钮。无玻璃卡片、无边框 -
+   仅一个悬停时变暖的安静交互。与休息遮罩的克制药丸一致。 */
 .postpone {
   flex-shrink: 0;
   padding: 6px 12px;

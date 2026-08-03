@@ -1,10 +1,10 @@
 <script setup lang="ts">
+// KeyRecorder - 快捷键录制组件。
+// 监听真实按键并发出 Wails 加速键字符串（如 "Cmd+Shift+B"）。
+// macOS 修饰键命名与 Wails accelerator.String() 的平台分支一致：
+// Cmd, Ctrl, Option, Shift。
 import { Eraser, Keyboard } from '@lucide/vue'
 import { computed, onUnmounted, ref } from 'vue'
-
-// Records a key combination by listening to real key presses and emits the
-// Wails accelerator string (e.g. "Cmd+Shift+B"). macOS modifier naming matches
-// the platform branch of Wails' accelerator.String(): Cmd, Ctrl, Option, Shift.
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   conflict?: boolean
 }>(), {
-  placeholder: '—',
+  placeholder: '-',
   prompt: '…',
   clearTitle: 'Clear',
   disabled: false,
@@ -25,7 +25,9 @@ const emits = defineEmits<{ 'update:modelValue': [v: string] }>()
 
 const recording = ref(false)
 
+// 修饰键名称，按 Wails 序列化顺序排列
 const MOD_NAMES = ['Cmd', 'Ctrl', 'Option', 'Shift'] as const
+// 命名键集合
 const NAMED_KEYS = new Set([
   'backspace', 'tab', 'return', 'enter', 'escape', 'space', 'delete',
   'home', 'end', 'page up', 'page down', 'left', 'right', 'up', 'down',
@@ -33,12 +35,13 @@ const NAMED_KEYS = new Set([
   'f11', 'f12', 'f13', 'f14', 'f15', 'f16', 'f17', 'f18', 'f19', 'f20',
 ])
 
+/** 将键盘事件归一化为 Wails 加速键名称，无效键返回 null */
 function normalizeKey(e: KeyboardEvent): string | null {
   const raw = e.key
-  // Modifier keys alone never make a shortcut; wait for a real key.
+  // 修饰键本身不构成快捷键，等待真实按键
   if (['Meta', 'Alt', 'Shift', 'Control'].includes(raw)) return null
   const lower = raw.toLowerCase()
-  // F-keys (browser gives "F1", "F2", …) map directly to Wails' f1..f20.
+  // F 键（浏览器给出 "F1"、"F2"…）直接映射到 Wails 的 f1..f20
   if (/^f\d{1,2}$/.test(lower)) return lower
   if (raw === 'ArrowLeft') return 'left'
   if (raw === 'ArrowRight') return 'right'
@@ -49,13 +52,13 @@ function normalizeKey(e: KeyboardEvent): string | null {
   if (lower === ' ' || lower === 'spacebar') return 'space'
   if (lower === '+') return 'plus'
   if (NAMED_KEYS.has(lower)) return lower
-  // Single printable characters (letters, digits, punctuation). Modifiers and
-  // control keys have multi-character names and were caught above, so a
-  // one-character key here is a real character key.
+  // 单个可打印字符（字母、数字、标点）。修饰键和控制键有多字符名称，
+  // 已在上方捕获，所以这里的单字符键是真实字符键。
   if (lower.length === 1) return lower
   return null
 }
 
+/** 从键盘事件中提取修饰键列表 */
 function modsFrom(e: KeyboardEvent): string[] {
   const mods: string[] = []
   if (e.metaKey) mods.push('Cmd')
@@ -65,11 +68,12 @@ function modsFrom(e: KeyboardEvent): string[] {
   return mods
 }
 
+/** 录制中的 keydown 处理器 */
 function onKeydown(e: KeyboardEvent) {
   if (!recording.value) return
   e.preventDefault()
   e.stopPropagation()
-  // Swallow the system's "key press" sound for unhandled keys (e.g. Delete).
+  // 吞掉系统对未处理键的"按键"声（如 Delete）
   if (e.key === 'Delete') e.stopImmediatePropagation()
 
   if (e.key === 'Escape') {
@@ -80,23 +84,25 @@ function onKeydown(e: KeyboardEvent) {
   const key = normalizeKey(e)
   if (key === null) return
   if (mods.length === 0) return
-  // Order modifiers the way Wails serialises them (sorted: Cmd, Ctrl, Option, Shift).
+  // 按 Wails 序列化顺序排列修饰键
   const ordered = MOD_NAMES.filter(m => mods.includes(m))
   emits('update:modelValue', [...ordered, key].join('+'))
   recording.value = false
 }
 
+/** 开始录制 */
 function start() {
   if (props.disabled) return
   recording.value = true
   window.addEventListener('keydown', onKeydown, true)
 }
+/** 停止录制 */
 function stop() {
   recording.value = false
   window.removeEventListener('keydown', onKeydown, true)
 }
 
-// Display value: modelValue verbatim if set, otherwise the placeholder.
+// 显示值：有值则显示值，否则显示占位符
 const display = computed(() => (props.modelValue && props.modelValue.length ? props.modelValue : props.placeholder))
 
 onUnmounted(() => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// GSegmented - 分段选择器组件。
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 

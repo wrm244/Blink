@@ -3,94 +3,33 @@ import { ChevronRight } from '@lucide/vue'
 import { Events } from '@wailsio/runtime'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BreakService } from '../../bindings/blink'
-import { Phase } from '../../bindings/blink/internal/breakengine/models'
+import { BreakService } from '@bindings/blink'
+import { Phase } from '@bindings/blink/internal/breakengine/models'
+import { useRestScreen } from '@/composables/useRestScreen'
 
 const { t, locale } = useI18n()
 
-// ---- rest-screen content (quote + wallpaper) ----
-// Fetched from the free xygeng.cn open APIs when a break overlay appears. All
-// failures fall back silently to the plain slate backdrop so an offline app is
-// never worse than before. The day key keeps the Bing image cached per-calendar
-// day (a "today's picture" is pointless refetched a minute later), while the
-// quote is refetched each break so it feels fresh.
-const quote = ref('')
-const quoteMeta = ref('')
-const bgUrl = ref('')
-const dayKey = new Date().toISOString().slice(0, 10)
+// ---- 休息屏幕内容（每日一句 + 壁纸） ----
+const { quote, quoteMeta, bgUrl, enrichRestScreen } = useRestScreen()
 
-function enrichRestScreen() {
-  fetchOne()
-  fetchBing()
-}
-
-async function fetchOne() {
-  try {
-    const res = await fetch('https://api.xygeng.cn/openapi/one')
-    if (!res.ok) return
-    const json = await res.json()
-    const content = json?.data?.content
-    if (typeof content !== 'string' || !content.trim()) return
-    quote.value = content.trim()
-    const origin = json.data.origin
-    const name = json.data.name
-    quoteMeta.value = [origin, name].filter(Boolean).join(' · ')
-  } catch {
-    /* offline — leave the plain backdrop */
-  }
-}
-
-async function fetchBing() {
-  try {
-    const cached = sessionStorage.getItem('pm:bing')
-    if (cached) {
-      const parsed = JSON.parse(cached)
-      if (parsed?.day === dayKey && typeof parsed.url === 'string') {
-        bgUrl.value = parsed.url
-        return
-      }
-    }
-    const res = await fetch('https://api.xygeng.cn/openapi/bing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index: 0 }),
-    })
-    if (!res.ok) return
-    const json = await res.json()
-    const urls = json?.data?.urls
-    if (!Array.isArray(urls) || urls.length === 0) return
-    // urls is sorted highest-resolution first, so urls[0] is the 1920×1080
-    // variant — the "today's picture" at its best quality.
-    const url = urls[0]
-    try {
-      sessionStorage.setItem('pm:bing', JSON.stringify({ day: dayKey, url }))
-    } catch { /* storage full — cache is best-effort */ }
-    bgUrl.value = url
-  } catch {
-    /* offline — leave the plain backdrop */
-  }
-}
-
-// ---- break engine state (countdown) ----
+// ---- 休息引擎状态（倒计时） ----
 const phase = ref<string>('')
 const remaining = ref(0)
 const total = ref(0)
 let off: (() => void) | undefined
 
-// ---- wall clock (current date + time, precise to the second) ----
-// `now` is refreshed at each whole-second boundary so the displayed seconds
-// never jump or stutter. We recompute the timeout to the next boundary on
-// every tick instead of a fixed 1 s interval, which would drift under load.
+// ---- 墙钟（当前日期+时间，精确到秒） ----
+// `now` 在每个整秒边界刷新，确保显示的秒数不跳动。
+// 每次重新计算到下一秒边界的超时，而非固定 1s 间隔（会漂移）。
 const now = ref(new Date())
 let clockTimer: ReturnType<typeof setTimeout> | undefined
 
 onMounted(async () => {
-  // --- rest-screen content (quote + wallpaper) ---
-  // Fire the network requests before the state binding so the break screen is
-  // populated as early as possible (and so a slow binding never delays them).
+  // --- 休息屏幕内容（每日一句 + 壁纸） ---
+  // 在状态绑定之前发起网络请求，让休息屏幕尽早填充内容
   enrichRestScreen()
 
-  // --- countdown ---
+  // --- 倒计时 ---
   const st = await BreakService.GetState()
   phase.value = st.phase
   remaining.value = st.remainingSec
@@ -101,7 +40,7 @@ onMounted(async () => {
     total.value = ev.data.totalSec
   })
 
-  // --- wall clock: align ticks to second boundaries ---
+  // --- 墙钟：对齐到秒边界 ---
   now.value = new Date()
   scheduleClockTick()
 })
@@ -112,10 +51,10 @@ onUnmounted(() => {
 })
 
 /**
- * Schedules the next wall-clock update at the start of the next second.
- * Using setTimeout (re-scheduled each tick) instead of setInterval keeps
- * the display pinned to real second boundaries — setInterval(1000) drifts
- * because the callback can fire a few ms late and accumulate.
+ * 将下一次墙钟更新调度到下一个整秒边界。
+ * 使用 setTimeout（每次重新调度）而非 setInterval，
+ * 让显示锁定在真实秒边界上——setInterval(1000) 因为回调可能
+ * 延迟几毫秒而累积漂移。
  */
 function scheduleClockTick() {
   const msToNextSecond = 1000 - (Date.now() % 1000)
@@ -125,22 +64,22 @@ function scheduleClockTick() {
   }, msToNextSecond)
 }
 
-// ---- derived values ----
+// ---- 派生值 ----
 
 const isLong = computed(() => phase.value === Phase.PhaseLongBreak)
 const label = computed(() => (isLong.value ? t('break.longLabel') : t('break.shortLabel')))
 
-// Single desaturated accent per break type. Long breaks use a calm gray-green,
-// short breaks use a neutral slate. No gradients.
+// 每种休息类型使用单一去饱和强调色。长休息用柔和灰绿，
+// 短休息用中性板岩色。无渐变。
 const accent = computed(() => (isLong.value ? '#6b8f7a' : '#8a96a8'))
 
-// Progress: fraction of the break that has elapsed (0 → 1).
+// 进度：已过时间占比 (0 -> 1)
 const fraction = computed(() => {
   if (total.value <= 0) return 0
   return Math.max(0, Math.min(1, 1 - remaining.value / total.value))
 })
 
-// Break countdown formatted as M:SS.
+// 休息倒计时格式化为 M:SS
 const clock = computed(() => {
   const m = Math.floor(remaining.value / 60)
   const s = remaining.value % 60
@@ -148,11 +87,10 @@ const clock = computed(() => {
 })
 
 /**
- * Current date + time, localised and precise to the second.
- * Intl.DateTimeFormat is used so the weekday/month names follow the active
- * locale (zh-CN / en). hour12:false gives a 24-hour clock in both locales,
- * which reads cleanly on a rest screen. The formatter is memoized on locale
- * (constructing one does locale negotiation) rather than rebuilt every tick.
+ * 当前日期+时间，本地化并精确到秒。
+ * 使用 Intl.DateTimeFormat 让星期/月份名称跟随活动语言（zh-CN / en）。
+ * hour12:false 在两种语言下都给出 24 小时制，休息屏幕上读起来更清晰。
+ * formatter 按 locale 缓存（构造时进行语言协商）而非每次 tick 重建。
  */
 const dateFmt = computed(() => {
   const loc = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
@@ -168,11 +106,10 @@ const dateFmt = computed(() => {
 })
 const datetime = computed(() => dateFmt.value.format(now.value))
 
-// The quote block only takes space once the quote has loaded, so the hero
-// countdown never jumps around as the request resolves.
+// 每日一句加载后才占空间，这样英雄区倒计时不会因请求完成而跳动
 const hasQuote = computed(() => quote.value.length > 0)
-// date-style quotes (e.g. "腊月廿四：小年") are short and carry a leading
-// "：" — long aphorisms with an early colon must not be misdetected.
+// 日期式名句（如"腊月廿四：小年"）较短且带前导"：" -
+// 带早期冒号的长名言不应被误判。
 const isDate = computed(() => {
   const idx = quote.value.indexOf('：')
   return idx > 0 && idx < 12 && quote.value.length < 40
@@ -188,10 +125,10 @@ function skip() { BreakService.SkipBreak() }
     <div class="vignette" aria-hidden="true" />
 
     <main class="content">
-      <!-- Current date + time: secondary context at the top, very muted. -->
+      <!-- 当前日期+时间：顶部次要信息，非常柔和 -->
       <p class="datetime tabular-nums">{{ datetime }}</p>
 
-      <!-- One-quote: quiet inspiration, only rendered once loaded. -->
+      <!-- 每日一句：安静灵感，加载后渲染 -->
       <div v-if="hasQuote" class="quote">
         <p class="quote__text" :class="{ 'quote__text--date': isDate }">{{ quote }}</p>
         <p v-if="quoteMeta" class="quote__meta">{{ quoteMeta }}</p>
@@ -199,7 +136,7 @@ function skip() { BreakService.SkipBreak() }
 
       <p class="label">{{ label }}</p>
 
-      <!-- Break countdown: the hero element. -->
+      <!-- 休息倒计时：核心元素 -->
       <div class="clock tabular-nums">{{ clock }}</div>
 
       <div class="progress" aria-hidden="true">
@@ -218,11 +155,10 @@ function skip() { BreakService.SkipBreak() }
 
 <style scoped>
 /*
- * Break overlay — full-screen, top-priority rest screen.
- * The break countdown is the hero; the wall clock sits above it as quiet
- * context. No SVG ring (avoids any square viewport artifact), no ambient
- * blobs, no gradients on accents. The window is created at ScreenSaver
- * window level (see windows.go) so it covers the Dock and menu bar too.
+ * 休息遮罩 - 全屏、最高优先级的休息屏幕。
+ * 休息倒计时是核心；墙钟在其上方作为安静的上下文。
+ * 无 SVG 环（避免方形视口伪影），无环境光斑，无强调色渐变。
+ * 窗口创建在 ScreenSaver 层级（见 windows.go），覆盖 Dock 和菜单栏。
  */
 .overlay {
   position: fixed;
@@ -231,7 +167,7 @@ function skip() { BreakService.SkipBreak() }
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Slate gradient fallback — replaced by the wallpaper photo when it loads. */
+  /* 板岩色渐变兜底 - 壁纸加载后替换 */
   background: linear-gradient(160deg, #181a1d 0%, #1f2227 50%, #15171a 100%);
   color: #e8e6e1;
   user-select: none;
@@ -240,12 +176,12 @@ function skip() { BreakService.SkipBreak() }
   cursor: default;
   overflow: hidden;
 }
-/* Belt-and-braces: never show a selection highlight over the photo. */
+/* 双保险：永不在照片上显示选中高亮 */
 .overlay ::selection {
   background: transparent;
 }
 
-/* Bing "picture of the day" wallpaper: full-bleed cover behind everything. */
+/* Bing "每日图片"壁纸：全出血覆盖在一切之后 */
 .wallpaper {
   position: absolute;
   inset: 0;
@@ -260,8 +196,8 @@ function skip() { BreakService.SkipBreak() }
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Dark scrim over the photo so the countdown text stays readable in any
-   lighting. Solid gradient, no blur (cheap, and the photo is already soft). */
+/* 照片上的暗色遮罩，确保倒计时文字在任何光线下都清晰可读。
+   实色渐变，无模糊（开销低，且照片本身已足够柔和） */
 .scrim {
   position: absolute;
   inset: 0;
@@ -270,7 +206,7 @@ function skip() { BreakService.SkipBreak() }
   pointer-events: none;
 }
 
-/* Single soft vignette for visual focus on the center. */
+/* 单一柔和暗角，将视觉焦点引向中心 */
 .vignette {
   position: absolute;
   inset: 0;
@@ -294,8 +230,8 @@ function skip() { BreakService.SkipBreak() }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Wall clock: smallest text — quiet context, but bumped above the faintest
-   level since it now sits on a photo. */
+/* 墙钟：最小文字 - 安静上下文，但比最淡层级稍亮
+   因为现在叠在照片上 */
 .datetime {
   margin: 0 0 -12px;
   font-size: 15px;
@@ -305,9 +241,9 @@ function skip() { BreakService.SkipBreak() }
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
-/* Quote: max two lines, soft drop shadow so it stays legible over the photo.
-   date-style quotes (e.g. "腊月廿四：小年") get a slightly larger, calmer
-   treatment and drop the attribution line. */
+/* 每日一句：最多两行，柔和投影确保叠在照片上可读。
+   日期式名句（如"腊月廿四：小年"）使用稍大、更平静的处理，
+   并省略出处行。 */
 .quote {
   max-width: min(680px, 82vw);
   display: flex;
@@ -349,11 +285,11 @@ function skip() { BreakService.SkipBreak() }
   font-weight: 600;
   color: rgba(240, 238, 233, 0.72);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
-  padding-left: 0.42em; /* offset for letter-spacing visual centering */
+  padding-left: 0.42em; /* 偏移以补偿字间距的视觉居中 */
 }
 
-/* Hero clock — the dominant element. Medium weight + soft shadow so the thin
-   numerals stay crisp over a photo; tabular-nums keeps digits from shifting. */
+/* 核心倒计时 - 主导元素。中等字重 + 柔和投影让细数字在照片上保持清晰；
+   tabular-nums 防止数字跳动 */
 .clock {
   font-size: clamp(140px, 22vmin, 210px);
   font-weight: 400;
@@ -364,8 +300,8 @@ function skip() { BreakService.SkipBreak() }
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 8px 40px rgba(0, 0, 0, 0.3);
 }
 
-/* Thin progress line beneath the clock. Track is barely visible; the fill is
-   the only chromatic accent on the screen. */
+/* 倒计时下方的细进度线。轨道几乎不可见；
+   填充是屏幕上唯一的色彩强调 */
 .progress {
   width: 260px;
   height: 2px;
@@ -393,7 +329,7 @@ function skip() { BreakService.SkipBreak() }
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
-/* Skip button: restrained glass pill, sits low and unobtrusive. */
+/* 跳过按钮：克制的玻璃药丸，位置低且不显眼 */
 .skip {
   display: inline-flex;
   align-items: center;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// GTimeField - 时间字段编辑组件：带步进按钮和预设芯片的数值编辑器。
 import { Minus, Plus } from '@lucide/vue';
 import { computed } from 'vue';
 
@@ -11,6 +12,7 @@ const props = withDefaults(defineProps<{
   step: number
   unit?: string
   presets?: number[]
+  // 秒为单位的字段可自定义 chip 和显示格式
   chipLabel?: (v: number) => string
   displayValue?: (v: number) => string
 }>(), {
@@ -22,6 +24,7 @@ const props = withDefaults(defineProps<{
 
 const emits = defineEmits<{ 'update:modelValue': [v: number] }>()
 
+/** 设置值（限制在 min/max 范围内） */
 function set(v: number) {
   const clamped = Math.max(props.min, Math.min(props.max, v))
   emits('update:modelValue', clamped)

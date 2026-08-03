@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// GlassPanel - 玻璃拟态面板容器，可选增强（strong）变体。
 import { computed } from 'vue'
 import type { ClassValue } from 'clsx'
 import { cn } from '@/lib/utils'

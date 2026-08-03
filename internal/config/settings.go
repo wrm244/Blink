@@ -1,5 +1,5 @@
-// Package config holds the user-configurable settings for Blink and
-// persists them as JSON in the per-user application-support directory.
+// Package config 管理 Blink 的用户可配置设置，
+// 并以 JSON 格式持久化到用户级应用支持目录。
 package config
 
 import (
@@ -8,51 +8,49 @@ import (
 	"path/filepath"
 )
 
-// Settings is the full set of user-configurable behaviour.
+// Settings 是全部用户可配置行为。
 //
-// Durations are split into the unit the UI naturally edits in (minutes for the
-// long ones, seconds for the short break) and reconciled to time.Duration by
-// the break engine.
+// 时长按 UI 自然编辑的单位拆分（长时段用分钟，短休息用秒），
+// 由 break engine 统一转换为 time.Duration。
 type Settings struct {
-	// FocusDurationMin is how long a focus period lasts before a break is due.
+	// FocusDurationMin 是一次专注周期的时长，之后会提醒休息。
 	FocusDurationMin int `json:"focusDurationMin"`
-	// ShortBreakDurationSec is the length of a regular (short) break.
+	// ShortBreakDurationSec 是常规短休息的时长。
 	ShortBreakDurationSec int `json:"shortBreakDurationSec"`
-	// LongBreakDurationMin is the length of an occasional longer break.
+	// LongBreakDurationMin 是偶尔的较长休息的时长。
 	LongBreakDurationMin int `json:"longBreakDurationMin"`
-	// LongBreakInterval is how many short breaks happen before a long break.
+	// LongBreakInterval 是触发长休息前需要完成的短休息次数。
 	LongBreakInterval int `json:"longBreakInterval"`
-	// PreBreakWarningSec is the heads-up shown before a break starts.
+	// PreBreakWarningSec 是休息开始前的提前提醒时长。
 	PreBreakWarningSec int `json:"preBreakWarningSec"`
-	// IdleThresholdMin: after this many minutes of inactivity the focus timer
-	// is treated as paused and resets when activity resumes.
+	// IdleThresholdMin：不活动超过此时长后，专注计时器被视为暂停，
+	// 活动恢复时重置。
 	IdleThresholdMin int `json:"idleThresholdMin"`
-	// EnableLongBreaks toggles the occasional long-break cycle.
+	// EnableLongBreaks 切换偶尔的长休息循环。
 	EnableLongBreaks bool `json:"enableLongBreaks"`
-	// SoundEnabled toggles the break-end chime and pre-break tick.
+	// SoundEnabled 切换休息结束提示音和休息前提醒音。
 	SoundEnabled bool `json:"soundEnabled"`
-	// AutoStart launches the focus timer automatically when the app starts
-	// (after onboarding). When false, the user starts it manually from the tray.
+	// AutoStart 在应用启动后（完成引导后）自动开始专注计时。
+	// 为 false 时用户从托盘手动启动。
 	AutoStart bool `json:"autoStart"`
-	// Onboarded records whether the user has completed the first-run setup.
-	// Until it is true the engine does not run a countdown, so the app opens
-	// to a setup screen instead of immediately counting down.
+	// Onboarded 记录用户是否已完成首次设置。
+	// 在其为 true 之前引擎不运行倒计时，应用打开到设置页面而非立即倒计时。
 	Onboarded bool `json:"onboarded"`
-	// Language is the UI locale, "zh-CN" or "en" (empty = follow system).
+	// Language 是 UI 语言，"zh-CN" 或 "en"（空 = 跟随系统）。
 	Language string `json:"language"`
-	// Theme is the UI colour scheme: "system" (follow OS), "light", or "dark".
+	// Theme 是 UI 配色方案："system"（跟随系统）、"light" 或 "dark"。
 	Theme string `json:"theme"`
 
-	// Global keyboard shortcuts (Wails accelerator syntax, e.g. "Cmd+Shift+B").
+	// 全局键盘快捷键（Wails 加速键语法，如 "Cmd+Shift+B"）。
 	ShortcutStartBreak    string `json:"shortcutStartBreak"`
 	ShortcutSkipBreak     string `json:"shortcutSkipBreak"`
 	ShortcutPostponeBreak string `json:"shortcutPostponeBreak"`
 	ShortcutPreferences   string `json:"shortcutPreferences"`
 }
 
-// Default returns the built-in defaults, modelled on the 20-20-20 rule: a
-// focus period of 20 minutes, a 20-second short break, a 5-minute long break
-// every 4 short breaks, and a 10-second heads-up before each break.
+// Default 返回内置默认值，基于 20-20-20 规则：
+// 20 分钟专注、20 秒短休息、每 4 次短休息后 5 分钟长休息、
+// 每次休息前 10 秒提前提醒。
 func Default() Settings {
 	return Settings{
 		FocusDurationMin:      20,
@@ -74,8 +72,8 @@ func Default() Settings {
 	}
 }
 
-// withDefaults returns s with any zero/invalid values replaced by the defaults.
-// This keeps older saved files valid as new fields are added.
+// withDefaults 返回 s 中零值/无效值被替换为默认值后的设置。
+// 这确保旧的存档文件在新增字段后仍然有效。
 func (s Settings) withDefaults() Settings {
 	d := Default()
 	if s.FocusDurationMin < 1 {
@@ -111,9 +109,8 @@ func (s Settings) withDefaults() Settings {
 	return s
 }
 
-// configPath returns the path to the settings file. It lives under the OS's
-// per-user application-support directory (~/Library/Application Support on
-// macOS), which the user is not expected to edit by hand.
+// configPath 返回设置文件的路径。它位于 OS 的用户级应用支持目录下
+//（macOS 上为 ~/Library/Application Support），用户通常不需要手动编辑。
 func configPath() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -122,8 +119,7 @@ func configPath() (string, error) {
 	return filepath.Join(base, "Blink", "settings.json"), nil
 }
 
-// Load reads the settings from disk, falling back to defaults (and creating
-// the file) when none exist yet or the file is unreadable.
+// Load 从磁盘读取设置，不存在或不可读时回退到默认值（并创建文件）。
 func Load() (Settings, error) {
 	s := Default()
 	path, err := configPath()
@@ -133,7 +129,7 @@ func Load() (Settings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Nothing saved yet: persist the defaults so the file exists.
+			// 尚未保存过：持久化默认值以确保文件存在。
 			_ = Save(s)
 			return s, nil
 		}
@@ -145,7 +141,7 @@ func Load() (Settings, error) {
 	return s.withDefaults(), nil
 }
 
-// Save writes the settings to disk, creating the directory if needed.
+// Save 将设置写入磁盘，必要时创建目录。
 func Save(s Settings) error {
 	path, err := configPath()
 	if err != nil {

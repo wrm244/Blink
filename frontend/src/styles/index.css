@@ -60,7 +60,7 @@
   --glass-bg-strong: rgba(255, 255, 255, 0.07);
   --glass-border: rgba(255, 255, 255, 0.09);
   --glass-hl: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.18);
+  --glass-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.1);
 
   --track: rgba(255, 255, 255, 0.08);
   --track-fill: #94a3b8;
@@ -99,6 +99,15 @@
 @layer base {
   * {
     border-color: var(--glass-border);
+    /* 禁止文字选中、图片拖拽——桌面应用 UI 不需要这些浏览器行为 */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  /* 输入类元素需要正常选中 */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
   }
   html,
   body,

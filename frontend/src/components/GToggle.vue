@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// GToggle - 开关组件，基于 reka-ui 的 SwitchRoot 封装。
 import { computed } from 'vue'
 import { SwitchRoot, SwitchThumb } from 'reka-ui'
 import { cn } from '@/lib/utils'

@@ -1,36 +1,35 @@
 package breakengine
 
-// Phase is the high-level state the engine is currently in. It is emitted to
-// the frontend as a string so the UI can switch views without parsing numbers.
+// Phase 是引擎当前所处的高层状态。它以字符串形式发送给前端，
+// 这样 UI 无需解析数字就能切换视图。
 type Phase string
 
 const (
-	// PhaseFocusing: a work period is counting down toward the next break.
+	// PhaseFocusing：工作周期正在倒计时，等待下一次休息。
 	PhaseFocusing Phase = "focusing"
-	// PhasePreBreak: the heads-up window just before a break starts.
+	// PhasePreBreak：休息开始前的提醒窗口。
 	PhasePreBreak Phase = "prebreak"
-	// PhaseShortBreak: a regular short break overlay is showing.
+	// PhaseShortBreak：常规短休息遮罩正在显示。
 	PhaseShortBreak Phase = "shortbreak"
-	// PhaseLongBreak: an occasional longer break overlay is showing.
+	// PhaseLongBreak：偶尔的较长休息遮罩正在显示。
 	PhaseLongBreak Phase = "longbreak"
-	// PhaseIdle: the user has been inactive past the idle threshold; the focus
-	// timer is held and will reset when activity resumes.
+	// PhaseIdle：用户不活动时间超过空闲阈值；专注计时器被保持，
+	// 活动恢复后重置。
 	//
-	// Note: there is no PhasePaused constant. Pause() freezes the countdown by
-	// setting the live boolean e.paused without changing the phase, so the
-	// phase value during a user-pause is whatever it was when Pause was called
-	// (typically PhaseFocusing). The frontend reads the `paused` boolean in
-	// the emitted State, not the phase string, to detect pause.
+	// 注意：没有 PhasePaused 常量。Pause() 通过设置实时布尔值 e.paused
+	// 来冻结倒计时，不改变阶段，所以用户暂停时的阶段值就是调用 Pause
+	// 时的阶段（通常是 PhaseFocusing）。前端读取 State 中发出的 `paused`
+	// 布尔值来检测暂停，而不是阶段字符串。
 	PhaseIdle Phase = "idle"
 )
 
-// IsBreak reports whether the phase is an active break overlay (short or long).
+// IsBreak 报告该阶段是否是正在显示的休息遮罩（短休息或长休息）。
 func (p Phase) IsBreak() bool {
 	return p == PhaseShortBreak || p == PhaseLongBreak
 }
 
-// State is the snapshot emitted to the frontend on every tick and phase change.
-// Durations are expressed in whole seconds for easy formatting in the UI.
+// State 是每次 tick 和阶段变更时发送给前端的状态快照。
+// 时长以整秒表示，方便 UI 格式化。
 type State struct {
 	Phase           Phase `json:"phase"`
 	RemainingSec    int   `json:"remainingSec"`

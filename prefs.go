@@ -9,23 +9,21 @@ import (
 
 const prefsWindowName = "pm-prefs"
 
-// preferencesOptions describes the settings window. It uses a solid opaque
-// background (not macOS translucency): a translucent window on Tahoe shows a
-// bright glass frame at the edges and an overscroll "white" when content is
-// scrolled past its end. The web page paints its own themed gradient on top of
-// the opaque surface.
+// preferencesOptions 描述设置窗口。使用不透明实色背景（非 macOS 半透明）：
+// 在 Tahoe 上半透明窗口会在边缘显示明亮的玻璃边框，滚动到底时出现白色过滚动。
+// 网页在 opaque 表面上绘制自己的主题渐变。
+// Hidden: true - 窗口创建时隐藏，等前端数据加载完成后再显示，避免白屏闪烁。
 func preferencesOptions() application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Name:             prefsWindowName,
 		Title:            "Blink",
 		Width:            920,
 		Height:           660,
-		// Min size matches the default size so the window opens fixed and
-		// cannot be shrunk below the designed layout.
 		MinWidth:         920,
 		MinHeight:        660,
 		URL:              "/",
 		InitialPosition:  application.WindowCentered,
+		Hidden:           true,
 		BackgroundType:   application.BackgroundTypeSolid,
 		BackgroundColour: application.NewRGB(21, 23, 28),
 		Mac: application.MacWindow{
@@ -36,16 +34,15 @@ func preferencesOptions() application.WebviewWindowOptions {
 	}
 }
 
-// showPreferences reveals the settings window, creating it on first use.
+// showPreferences 显示设置窗口，首次调用时创建。
 //
-// Thread-safety: this may be called from the main thread (the ServiceStartup
-// hook on first run) or from a goroutine (tray menu / global shortcut). The
-// fresh-creation path deliberately does NOT call Show()/Focus(): NewWithOptions
-// already shows the window (Hidden is unset), and Show() does a re-entrant
-// InvokeSync that deadlocks the main thread (InvokeSync posts to the main
-// queue via dispatch_async then blocks on a WaitGroup; if the caller IS the
-// main thread, the posted block can never run). The existing-window branch
-// (Show/Focus) is only reached from goroutine callers, so it is safe.
+// 线程安全：可能从主线程（首次运行的 ServiceStartup 钩子）或
+// goroutine（托盘菜单 / 全局快捷键）调用。全新创建路径不调用
+// Show()/Focus()：NewWithOptions 已自行显示窗口（Hidden 未设置），
+// 而 Show() 执行可重入的 InvokeSync 会死锁主线程（InvokeSync 通过
+// dispatch_async 投递到主队列然后阻塞在 WaitGroup 上；如果调用者
+// 就是主线程，投递的 block 永远无法执行）。已有窗口分支（Show/Focus）
+// 仅从 goroutine 调用者到达，因此是安全的。
 func showPreferences() {
 	if app == nil {
 		return
@@ -57,14 +54,13 @@ func showPreferences() {
 		platform.Activate()
 		return
 	}
-	// Fresh creation: NewWithOptions shows the window itself (Hidden is false),
-	// whether it runs inline (app already running) or deferred (app still
-	// starting). Do not call Show()/Focus() here.
+	// 全新创建：NewWithOptions 自行显示窗口（Hidden 为 false），
+	// 无论内联执行（app 已运行）还是延迟执行（app 仍在启动）都一样。
+	// 不要在此调用 Show()/Focus()。
 	w := app.Window.NewWithOptions(preferencesOptions())
-	// While the settings window is open the app is a normal foreground app
-	// (Dock icon + Cmd-Tab). When it closes we return to a menu-bar-only
-	// accessory agent. The default close handler destroys the window, so each
-	// reopen is a fresh creation and re-registers this listener — no leak.
+	// 设置窗口打开时应用是普通前台应用（Dock 图标 + Cmd-Tab）。
+	// 窗口关闭时回到菜单栏代理。默认关闭处理器销毁窗口，
+	// 因此每次重新打开都是全新创建并重新注册此监听器--无泄漏。
 	w.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 		platform.SetDockVisible(false)
 	})

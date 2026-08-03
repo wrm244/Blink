@@ -1,31 +1,27 @@
 package main
 
 import (
-	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-
-	"blink/internal/breakengine"
 )
 
 var (
-	tray        *application.SystemTray
-	statusItem  *application.MenuItem
-	menuItemTakeBreak   *application.MenuItem
-	menuItemSkip        *application.MenuItem
-	menuItemPostpone    *application.MenuItem
-	menuItemPauseResume *application.MenuItem
-	menuItemStart       *application.MenuItem
-	menuItemReset       *application.MenuItem
-	menuItemPreferences *application.MenuItem
-	menuItemQuit        *application.MenuItem
-	// menuLang holds the active tray-menu locale. It is read by trayStatusLoop
-	// (and the menu click handlers, which run on the main thread) and written
-	// by setMenuLanguage, which SaveSettings dispatches on a goroutine. We use
-	// atomic.Value rather than a bare string so the race detector stays quiet
-	// and the read in trayStatusLoop never sees a half-written value.
+	tray                  *application.SystemTray
+	statusItem            *application.MenuItem
+	menuItemTakeBreak     *application.MenuItem
+	menuItemSkip          *application.MenuItem
+	menuItemPostpone      *application.MenuItem
+	menuItemPauseResume   *application.MenuItem
+	menuItemStart         *application.MenuItem
+	menuItemReset         *application.MenuItem
+	menuItemPreferences   *application.MenuItem
+	menuItemQuit          *application.MenuItem
+	// menuLang 持有当前托盘菜单语言。它被 trayStatusLoop（以及运行在
+	// 主线程的菜单点击处理器）读取，被 setMenuLanguage（SaveSettings
+	// 在 goroutine 上分发）写入。使用 atomic.Value 而非裸字符串，
+	// 这样竞态检测器保持安静，trayStatusLoop 中的读取永远不会看到
+	// 半写值。
 	menuLang atomic.Value
 )
 
@@ -33,14 +29,13 @@ func init() {
 	menuLang.Store("zh-CN")
 }
 
-// menuLangString loads the current menu locale as a plain string. Used by the
-// tray helpers below so they can stay simple.
+// menuLangString 以普通字符串形式加载当前菜单语言。
 func menuLangString() string {
 	return menuLang.Load().(string)
 }
 
-// Tray menu strings per locale. Kept in Go because the menu is built natively
-// on the macOS side, not in the webview.
+// 托盘菜单字符串，按语言分组。保存在 Go 中是因为菜单在 macOS 侧原生构建，
+// 而非在 webview 中。
 var trayStrings = map[string]map[string]string{
 	"zh-CN": {
 		"takeBreak":   "立即开始休息",
@@ -64,6 +59,7 @@ var trayStrings = map[string]map[string]string{
 	},
 }
 
+// tr 返回指定键在当前语言下的托盘菜单文本。
 func tr(key string) string {
 	if m, ok := trayStrings[menuLangString()]; ok {
 		if v, ok := m[key]; ok {
@@ -73,11 +69,11 @@ func tr(key string) string {
 	return trayStrings["en"][key]
 }
 
-// buildTray creates the menu-bar status item and its dropdown menu.
+// buildTray 创建菜单栏状态项及其下拉菜单。
 func buildTray() {
 	menu := application.NewMenu()
 
-	// A disabled first item that doubles as a live status read-out.
+	// 禁用的首项，兼作实时状态读数。
 	statusItem = menu.Add("Blink")
 	statusItem.SetEnabled(false)
 
@@ -108,8 +104,8 @@ func buildTray() {
 	tray.SetMenu(menu)
 }
 
-// setMenuLanguage rebuilds the tray menu item labels for the given locale.
-func setMenuLanguage(lang string) error {
+// setMenuLanguage 为指定语言重建托盘菜单项标签。
+func setMenuLanguage(lang string) {
 	menuLang.Store(lang)
 	if menuItemTakeBreak != nil {
 		menuItemTakeBreak.SetLabel(tr("takeBreak"))
@@ -121,110 +117,13 @@ func setMenuLanguage(lang string) error {
 		menuItemPreferences.SetLabel(tr("preferences"))
 		menuItemQuit.SetLabel(tr("quit"))
 	}
-	return nil
 }
 
+// togglePause 根据当前暂停状态切换暂停/继续。
 func togglePause() {
 	if engine.GetState().Paused {
 		engine.Resume()
 	} else {
 		engine.Pause()
 	}
-}
-
-// trayStatusLoop updates the status item label, tray label and tooltip when the
-// rendered text changes. The engine emits a tick event every second while
-// counting down, and the formatted label changes every second during focus/
-// break phases (never during pause/idle). By caching the last strings we skip
-// the main-thread SetLabel/SetTooltip calls (each of which triggers a native
-// redraw) when the text is identical, eliminating pointless UI work during
-// the paused and idle phases.
-func trayStatusLoop() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	var lastLabel, lastTooltip string
-	for range ticker.C {
-		st := engine.GetState()
-		label, tooltip := formatStatus(st)
-		if label == lastLabel && tooltip == lastTooltip {
-			continue
-		}
-		lastLabel, lastTooltip = label, tooltip
-		if tray != nil {
-			tray.SetLabel(label)
-			tray.SetTooltip(tooltip)
-		}
-		if statusItem != nil {
-			statusItem.SetLabel(tooltip)
-		}
-	}
-}
-
-func formatStatus(st breakengine.State) (label, tooltip string) {
-	rem := time.Duration(st.RemainingSec) * time.Second
-	switch st.Phase {
-	case breakengine.PhaseFocusing, breakengine.PhasePreBreak,
-		breakengine.PhaseShortBreak, breakengine.PhaseLongBreak:
-		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
-	case breakengine.PhaseIdle:
-		return "⏸", "Blink · " + tr("pauseResume")
-	default:
-		// Engine not running (e.g. before onboarding).
-		return "Blink", "Blink"
-	}
-}
-
-// trStatus localises the per-phase tooltip text.
-func trStatus(st breakengine.State, rem time.Duration) string {
-	switch st.Phase {
-	case breakengine.PhaseFocusing:
-		return sfmt("focusing", rem)
-	case breakengine.PhasePreBreak:
-		return sfmt("prebreak", rem)
-	case breakengine.PhaseShortBreak:
-		return sfmt("shortbreak", rem)
-	case breakengine.PhaseLongBreak:
-		return sfmt("longbreak", rem)
-	default:
-		return ""
-	}
-}
-
-// sfmt returns a localised "phase · remaining" string. Because the tray runs
-// outside the webview i18n, the strings live here.
-var statusStrings = map[string]map[string]string{
-	"zh-CN": {
-		"focusing":   "专注中，距下次休息 %s",
-		"prebreak":   "%s 后开始休息",
-		"shortbreak": "短休息，剩余 %s",
-		"longbreak":  "长休息，剩余 %s",
-	},
-	"en": {
-		"focusing":   "focusing, next break in %s",
-		"prebreak":   "break in %s",
-		"shortbreak": "short break, %s remaining",
-		"longbreak":  "long break, %s remaining",
-	},
-}
-
-func sfmt(phase string, rem time.Duration) string {
-	if m, ok := statusStrings[menuLangString()]; ok {
-		if tpl, ok := m[phase]; ok {
-			return fmt.Sprintf(tpl, fmtDuration(rem))
-		}
-	}
-	if tpl, ok := statusStrings["en"][phase]; ok {
-		return fmt.Sprintf(tpl, fmtDuration(rem))
-	}
-	return fmtDuration(rem)
-}
-
-func fmtDuration(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	d = d.Round(time.Second)
-	m := int(d.Minutes())
-	s := int(d.Seconds()) % 60
-	return fmt.Sprintf("%d:%02d", m, s)
 }

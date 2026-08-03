@@ -4,13 +4,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// windowCmd is a message sent (without blocking) from the state-machine goroutine
-// to the window-control goroutine. The state machine never touches AppKit
-// directly: window Show/Hide/Close and NewWithOptions all marshal to the main
-// thread internally, so performing them while holding the engine mutex would
-// risk deadlocking against a binding call that runs on the main thread. By
-// funnelling every window mutation through this single goroutine we keep the
-// mutex free of main-thread waits.
+// windowCmd 是从状态机 goroutine 发送给窗口控制 goroutine 的消息（非阻塞）。
+// 状态机从不直接操作 AppKit：窗口的 Show/Hide/Close 和 NewWithOptions
+// 内部都会调度到主线程，因此在持有引擎互斥锁时执行这些操作可能导致
+// 与主线程上的绑定调用死锁。通过将所有窗口操作集中到这个单一 goroutine，
+// 我们确保互斥锁不会因等待主线程而阻塞。
 type windowCmd int
 
 const (
@@ -20,9 +18,8 @@ const (
 	cmdHideNotice
 )
 
-// sendCmd enqueues a window command without blocking. Called under the engine
-// mutex; dropping a command is harmless because later commands supersede
-// earlier ones (e.g. a hide that follows a show wins).
+// sendCmd 非阻塞地入队一个窗口命令。在引擎互斥锁下调用；
+// 丢弃命令是无害的，因为后续命令会覆盖前面的（例如 hide 跟在 show 后面会胜出）。
 func (e *Engine) sendCmd(c windowCmd) {
 	select {
 	case e.cmdCh <- c:
@@ -35,15 +32,15 @@ func (e *Engine) hideOverlays() { e.sendCmd(cmdHideOverlays) }
 func (e *Engine) showNotice()   { e.sendCmd(cmdShowNotice) }
 func (e *Engine) hideNotice()   { e.sendCmd(cmdHideNotice) }
 
-// windowLoop owns the overlay and notice windows. It is the only goroutine that
-// reads or writes e.overlays and e.notice, so they need no mutex.
+// windowLoop 拥有遮罩和通知窗口的控制权。它是唯一读写 e.overlays
+// 和 e.notice 的 goroutine，因此这些字段不需要互斥锁。
 func (e *Engine) windowLoop() {
 	for {
 		select {
 		case <-e.stopCh:
-			// Drain any commands queued by Stop (e.g. hide overlays) before
-			// exiting, otherwise the select above might pick stopCh first and
-			// leave the overlay/notice windows on screen.
+			// 退出前排空 Stop 入队的命令（如 hide overlays），
+			// 否则上面的 select 可能先选中 stopCh，导致遮罩/通知窗口
+			// 残留在屏幕上。
 			for {
 				select {
 				case c := <-e.cmdCh:
@@ -58,6 +55,7 @@ func (e *Engine) windowLoop() {
 	}
 }
 
+// execWindowCmd 执行单个窗口命令。
 func (e *Engine) execWindowCmd(c windowCmd) {
 	switch c {
 	case cmdShowOverlays:
@@ -66,9 +64,9 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 			w.Show()
 		}
 	case cmdHideOverlays:
-		// Destroy the overlay windows instead of hiding them: hiding keeps the
-		// WKWebView alive and its WebKit renderer process resident in memory.
-		// They are cheap to recreate in ensureOverlays when the next break starts.
+		// 销毁遮罩窗口而非隐藏：隐藏会保持 WKWebView 存活，
+		// 其 WebKit 渲染进程仍驻留内存。下次休息时在 ensureOverlays
+		// 中重建的开销很小。
 		e.closeOverlays()
 	case cmdShowNotice:
 		e.ensureNotice()
@@ -83,10 +81,11 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 	}
 }
 
+// overlayName 根据屏幕 ID 生成遮罩窗口名称。
 func overlayName(screenID string) string { return "pm-overlay-" + screenID }
 
-// overlaysMatch reports whether the cached overlay windows still correspond to
-// the currently attached displays (same count and screen IDs).
+// overlaysMatch 报告缓存的遮罩窗口是否仍然对应当前连接的显示器
+// （数量和屏幕 ID 都相同）。
 func (e *Engine) overlaysMatch(screens []*application.Screen) bool {
 	if len(e.overlays) != len(screens) {
 		return false
@@ -103,6 +102,7 @@ func (e *Engine) overlaysMatch(screens []*application.Screen) bool {
 	return true
 }
 
+// closeOverlays 关闭并清空所有遮罩窗口。
 func (e *Engine) closeOverlays() {
 	for _, w := range e.overlays {
 		w.Close()
@@ -110,9 +110,9 @@ func (e *Engine) closeOverlays() {
 	e.overlays = nil
 }
 
-// ensureOverlays creates one full-screen translucent window per attached
-// display (so multi-monitor setups get the blur on every screen), reusing the
-// cached windows when the display set hasn't changed.
+// ensureOverlays 为每个连接的显示器创建一个全屏半透明窗口
+// （多显示器设置下每个屏幕都会有遮罩），在显示器集合未变化时
+// 复用缓存的窗口。
 func (e *Engine) ensureOverlays() {
 	a := e.app_()
 	if a == nil {
@@ -129,45 +129,7 @@ func (e *Engine) ensureOverlays() {
 	}
 }
 
-func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
-	return application.WebviewWindowOptions{
-		Name:           overlayName(s.ID),
-		Title:          "",
-		Frameless:      true,
-		AlwaysOnTop:    true,
-		DisableResize:  true,
-		Hidden:         true,
-		URL:            "/#break",
-		Width:          s.Bounds.Width,
-		Height:         s.Bounds.Height,
-		X:              s.Bounds.X,
-		Y:              s.Bounds.Y,
-		InitialPosition: application.WindowXY,
-		// Solid dark slate background: matches the CSS gradient so there is no
-		// color flash before the webview paints. Opaque (not translucent) to
-		// avoid macOS Tahoe's bright glassy frame at the window edges.
-		BackgroundType:   application.BackgroundTypeSolid,
-		BackgroundColour:  application.NewRGB(24, 26, 29),
-		Mac: application.MacWindow{
-		// ScreenSaver is the highest NSWindow level (1000), above PopUpMenu
-		// (101), Status (25, where the Dock and menu bar live) and everything
-		// else. This guarantees the overlay covers the Dock and menu bar at all
-		// times — lower levels like Status compete with the Dock for z-order
-		// and intermittently lose, letting the Dock bleed through.
-		WindowLevel:        application.MacWindowLevelScreenSaver,
-		CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorStationary,
-		TitleBar:            application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
-		DisableShadow:       true,
-	},
-		CloseButtonState:      application.ButtonHidden,
-		MinimiseButtonState:   application.ButtonHidden,
-		MaximiseButtonState:   application.ButtonHidden,
-		FullscreenButtonState: application.ButtonHidden,
-	}
-}
-
-// ensureNotice lazily creates the single pre-break heads-up window, placed at
-// the top centre of the primary display.
+// ensureNotice 懒创建唯一的休息前提醒窗口，放置在主显示器顶部居中。
 func (e *Engine) ensureNotice() {
 	if e.notice != nil {
 		return
@@ -177,41 +139,4 @@ func (e *Engine) ensureNotice() {
 		return
 	}
 	e.notice = a.Window.NewWithOptions(noticeOptions(a))
-}
-
-func noticeOptions(a *application.App) application.WebviewWindowOptions {
-	const (
-		noticeWidth  = 380
-		noticeHeight = 108
-	)
-	x, y := 0, 80
-	if primary := a.Screen.GetPrimary(); primary != nil {
-		x = primary.WorkArea.X + (primary.WorkArea.Width-noticeWidth)/2
-		y = primary.WorkArea.Y + 80
-	}
-	return application.WebviewWindowOptions{
-		Name:            "pm-notice",
-		Title:           "",
-		Frameless:       true,
-		AlwaysOnTop:     true,
-		DisableResize:   true,
-		Hidden:          true,
-		URL:             "/#notice",
-		Width:           noticeWidth,
-		Height:          noticeHeight,
-		X:               x,
-		Y:               y,
-		InitialPosition: application.WindowXY,
-		BackgroundType:   application.BackgroundTypeTransparent,
-		BackgroundColour:  application.NewRGBA(0, 0, 0, 0),
-		Mac: application.MacWindow{
-			Backdrop:    application.MacBackdropTranslucent,
-			WindowLevel: application.MacWindowLevelFloating,
-			TitleBar:    application.MacTitleBar{Hide: true, AppearsTransparent: true, FullSizeContent: true},
-		},
-		CloseButtonState:      application.ButtonHidden,
-		MinimiseButtonState:   application.ButtonHidden,
-		MaximiseButtonState:   application.ButtonHidden,
-		FullscreenButtonState: application.ButtonHidden,
-	}
 }

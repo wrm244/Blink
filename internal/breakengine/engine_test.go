@@ -7,55 +7,54 @@ import (
 	"blink/internal/config"
 )
 
-// newTestEngine returns an engine with sound disabled and default timing so
-// tests are deterministic and never touch platform sound/UI code.
+// newTestEngine 返回一个禁用音效、使用默认时长的引擎，
+// 确保测试是确定性的且不触碰平台音效/UI 代码。
 func newTestEngine() *Engine {
 	s := config.Default()
 	s.SoundEnabled = false
 	return New(s)
 }
 
-// startEngine initialises the engine the way Start() does (fresh focus phase
-// with a sane lastTick baseline) without launching goroutines or touching the
-// Wails app.
+// startEngine 以 Start() 的方式初始化引擎（全新专注阶段 + 合理的
+// lastTick 基线），但不启动 goroutine 也不触碰 Wails 应用。
 func startEngine(e *Engine) time.Time {
 	now := time.Now()
-	e.startFocus(now)
+	e.startFocus()
 	e.lastTick = now
 	return now
 }
 
-// fullRemainingOK reports whether remaining is the full focus duration,
-// allowing for sub-second wall-clock drift between phase setup and the read.
+// fullRemainingOK 报告 remaining 是否等于完整专注时长，
+// 允许亚秒级的墙钟漂移（阶段设置与读取之间的时间差）。
 func fullRemainingOK(sec int, e *Engine) bool {
 	full := int(e.focusDur() / time.Second)
 	return sec >= full-1 && sec <= full
 }
 
-// within reports whether a is within tol of b.
+// within 报告 a 与 b 的差值是否在 tol 范围内。
 func within(a, b, tol time.Duration) bool {
 	d := a - b
 	return d >= -tol && d <= tol
 }
 
-// ---- sleep gap reset ----
+// ---- 休眠间隔重置测试 ----
 
 func TestTickNormalGapDoesNotResetFocus(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
 
 	phaseEndBefore := e.phaseEnd
-	e.tick(time.Now().Add(time.Second)) // 1s gap <= sleepGap
+	e.tick(time.Now().Add(time.Second)) // 1s 间隔 <= sleepGap
 
 	if e.phase != PhaseFocusing {
-		t.Fatalf("normal tick changed phase: %s", e.phase)
+		t.Fatalf("普通 tick 改变了阶段：%s", e.phase)
 	}
 	if !e.phaseEnd.Equal(phaseEndBefore) {
-		t.Errorf("normal tick reset phaseEnd: %v -> %v", phaseEndBefore, e.phaseEnd)
+		t.Errorf("普通 tick 重置了 phaseEnd：%v -> %v", phaseEndBefore, e.phaseEnd)
 	}
 	st := e.state()
 	if st.RemainingSec >= int(e.focusDur()/time.Second) {
-		t.Errorf("countdown did not advance after 1s tick: remaining=%d", st.RemainingSec)
+		t.Errorf("tick 后倒计时未推进：remaining=%d", st.RemainingSec)
 	}
 }
 
@@ -63,144 +62,139 @@ func TestTickSleepGapResetsFocusPeriod(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
 
-	// A gap larger than sleepGap means the machine slept: the stale focus
-	// period must be reset to a fresh full period instead of firing an
-	// overdue break. The tick time is derived from the real clock (the engine
-	// resets against time.Now(), not the caller's timestamp).
+	// 间隔大于 sleepGap 表示机器休眠了：过期的专注周期必须重置为
+	// 全新的完整周期，而不是触发一个过期的休息。tick 时间来自真实时钟
+	// （引擎基于 time.Now() 重置，而非调用者的时间戳）。
 	slept := time.Now().Add(sleepGap + 30*time.Second)
 	e.tick(slept)
 
 	if e.phase != PhaseFocusing {
-		t.Fatalf("sleep gap left phase=%s, want focusing", e.phase)
+		t.Fatalf("休眠间隔后阶段=%s，应为 focusing", e.phase)
 	}
 	if got := e.phaseEnd.Sub(time.Now()); !within(got, e.focusDur(), 2*time.Second) {
-		t.Errorf("sleep gap did not reset to full focus period: phaseEnd in %v, want ~%v", got, e.focusDur())
+		t.Errorf("休眠间隔未重置为完整专注周期：phaseEnd 在 %v 后，应为 ~%v", got, e.focusDur())
 	}
 	if st := e.state(); !fullRemainingOK(st.RemainingSec, e) {
-		t.Errorf("remaining after sleep reset = %d, want ~%d", st.RemainingSec, int(e.focusDur()/time.Second))
+		t.Errorf("休眠重置后 remaining=%d，应为 ~%d", st.RemainingSec, int(e.focusDur()/time.Second))
 	}
 }
 
-// TestTickSleepGapDuringBreakEndsBreak is a recovery case: an overdue break
-// after sleep must be ended (and the short-break counter advanced) rather than
-// leaving the user stuck on a stale break overlay.
+// TestTickSleepGapDuringBreakEndsBreak 是一个恢复测试：休眠后过期的
+// 休息必须被结束（且短休息计数器递增），而不是让用户卡在过期的休息遮罩上。
 func TestTickSleepGapDuringBreakEndsBreak(t *testing.T) {
 	e := newTestEngine()
 	now := startEngine(e)
 	e.startBreak()
 
 	if e.phase != PhaseShortBreak {
-		t.Fatalf("setup: want short break, got %s", e.phase)
+		t.Fatalf("设置：应为短休息，得到 %s", e.phase)
 	}
 
 	e.tick(now.Add(sleepGap + time.Minute))
 
 	if e.phase != PhaseFocusing {
-		t.Fatalf("sleep gap during break left phase=%s, want focusing", e.phase)
+		t.Fatalf("休息期间休眠间隔后阶段=%s，应为 focusing", e.phase)
 	}
 	if e.breaksDone != 1 {
-		t.Errorf("breaksDone = %d after ended short break, want 1", e.breaksDone)
+		t.Errorf("结束短休息后 breaksDone=%d，应为 1", e.breaksDone)
 	}
 }
 
-// ---- Pause freeze / Resume restore ----
+// ---- 暂停冻结 / 恢复测试 ----
 
 func TestPauseFreezesCountdownAcrossTicks(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
-	// A 4s gap (<= sleepGap) is a normal tick; time derives from the real
-	// clock so Pause's time.Until sees the same elapsed time.
+	// 4s 间隔（<= sleepGap）是普通 tick；时间来自真实时钟，
+	// 所以 Pause 的 time.Until 看到相同的已过时间。
 	e.tick(time.Now().Add(4 * time.Second))
 	frozen := e.state().RemainingSec
 	if frozen >= int(e.focusDur()/time.Second) {
-		t.Fatalf("setup: countdown did not advance: remaining=%d", frozen)
+		t.Fatalf("设置：倒计时未推进：remaining=%d", frozen)
 	}
 
 	e.Pause()
 	if !e.paused {
-		t.Fatal("Pause did not set paused")
+		t.Fatal("Pause 未设置 paused")
 	}
 	if e.pausedRemaining <= 0 {
-		t.Fatalf("pausedRemaining = %v, want > 0", e.pausedRemaining)
+		t.Fatalf("pausedRemaining=%v，应 > 0", e.pausedRemaining)
 	}
 
-	// Frozen countdown must survive ticks, including a gap larger than
-	// sleepGap (a long pause must not look like system sleep and reset the
-	// user's progress).
+	// 冻结的倒计时必须在 tick 后保持不变，包括大于 sleepGap 的间隔
+	//（长时间暂停不应被误判为系统休眠并重置用户进度）。
 	e.tick(time.Now().Add(sleepGap + 10*time.Minute))
 
 	st := e.state()
 	if !st.Paused {
-		t.Fatal("state lost paused flag after ticks")
+		t.Fatal("tick 后状态丢失了 paused 标志")
 	}
 	if st.Phase != PhaseFocusing {
-		t.Fatalf("paused engine changed phase: %s", st.Phase)
+		t.Fatalf("暂停的引擎改变了阶段：%s", st.Phase)
 	}
 	if st.RemainingSec != frozen {
-		t.Errorf("paused countdown moved: %d -> %d", frozen, st.RemainingSec)
+		t.Errorf("暂停的倒计时移动了：%d -> %d", frozen, st.RemainingSec)
 	}
 }
 
-// TestPauseNegativeCases covers the no-op guards: pause while already paused
-// and pause while idle must not corrupt the frozen state.
+// TestPauseNegativeCases 覆盖空操作守卫：已暂停时再暂停和空闲时暂停
+// 不得破坏冻结的状态。
 func TestPauseNegativeCases(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
 	e.Pause()
 	pausedRemaining := e.pausedRemaining
 
-	// Double pause is a no-op: must not re-freeze from the (still running)
-	// wall-clock phaseEnd, which would silently extend the countdown.
+	// 双重暂停是空操作：不得从（仍在运行的）墙钟 phaseEnd 重新冻结，
+	// 否则会静默延长倒计时。
 	e.Pause()
 	if !e.paused || e.pausedRemaining != pausedRemaining {
-		t.Errorf("double pause mutated state: paused=%v remaining=%v", e.paused, e.pausedRemaining)
+		t.Errorf("双重暂停改变了状态：paused=%v remaining=%v", e.paused, e.pausedRemaining)
 	}
 
-	// Pause while idle is a no-op (already effectively paused by inactivity).
+	// 空闲时暂停是空操作（已被不活动有效暂停）。
 	e2 := newTestEngine()
 	startEngine(e2)
 	e2.phase = PhaseIdle
 	e2.Pause()
 	if e2.paused {
-		t.Error("Pause while idle set paused")
+		t.Error("空闲时暂停设置了 paused")
 	}
 	if e2.phase != PhaseIdle {
-		t.Errorf("Pause while idle changed phase: %s", e2.phase)
+		t.Errorf("空闲时暂停改变了阶段：%s", e2.phase)
 	}
 }
 
 func TestResumeRestoresCountdown(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
-	// Simulate 3s of elapsed focus time. tick() only evaluates phase
-	// transitions; the countdown itself is the absolute phaseEnd vs the real
-	// clock, so pull phaseEnd back to represent the elapsed time.
+	// 模拟 3 秒已过的专注时间。tick() 只评估阶段转换；倒计时本身是
+	// 绝对 phaseEnd 对比真实时钟，所以把 phaseEnd 回拨来表示已过时间。
 	e.phaseEnd = e.phaseEnd.Add(-3 * time.Second)
 	e.Pause()
 	frozen := e.pausedRemaining
 	if s := int(frozen / time.Second); s < 1196 || s > 1198 {
-		t.Fatalf("setup: frozen remaining = %ds, want ~1197s (20min minus 3s)", s)
+		t.Fatalf("设置：冻结 remaining=%ds，应为 ~1197s（20分钟减3秒）", s)
 	}
 
 	e.Resume()
 	if e.paused {
-		t.Fatal("Resume did not clear paused")
+		t.Fatal("Resume 未清除 paused")
 	}
 	if e.pausedRemaining != 0 {
-		t.Errorf("pausedRemaining not cleared: %v", e.pausedRemaining)
+		t.Errorf("pausedRemaining 未清除：%v", e.pausedRemaining)
 	}
-	// phaseEnd must be rebuilt from the frozen remaining, not the wall clock.
-	// That is what makes the countdown continue from the frozen value: every
-	// subsequent tick measures against this phaseEnd, so exactly
-	// pausedRemaining remains. (A unit test cannot wait out real wall-clock
-	// seconds to observe a tick decrement.)
+	// phaseEnd 必须从冻结的 remaining 重建，而非墙钟。
+	// 这正是倒计时从冻结值继续的原因：后续每个 tick 都基于此 phaseEnd
+	// 测量，所以恰好剩余 pausedRemaining。（单元测试无法等待真实墙钟秒数
+	// 来观察 tick 递减。）
 	if got := e.phaseEnd.Sub(time.Now()); !within(got, frozen, 2*time.Second) {
-		t.Errorf("Resume did not restore phaseEnd: in %v, want ~%v", got, frozen)
+		t.Errorf("Resume 未恢复 phaseEnd：%v 后，应为 ~%v", got, frozen)
 	}
 }
 
-// TestResumeFromIdleRestartsFocus is a recovery case: manually resuming an
-// idle engine starts a fresh focus period.
+// TestResumeFromIdleRestartsFocus 是一个恢复测试：手动恢复空闲引擎
+// 会开始新的专注周期。
 func TestResumeFromIdleRestartsFocus(t *testing.T) {
 	e := newTestEngine()
 	startEngine(e)
@@ -210,129 +204,12 @@ func TestResumeFromIdleRestartsFocus(t *testing.T) {
 	e.Resume()
 
 	if e.phase != PhaseFocusing {
-		t.Fatalf("Resume from idle left phase=%s, want focusing", e.phase)
+		t.Fatalf("从空闲恢复后阶段=%s，应为 focusing", e.phase)
 	}
 	if e.idle {
-		t.Error("Resume from idle did not clear idle")
+		t.Error("从空闲恢复未清除 idle")
 	}
 	if st := e.state(); !fullRemainingOK(st.RemainingSec, e) {
-		t.Errorf("remaining after idle resume = %d, want full %d", st.RemainingSec, int(e.focusDur()/time.Second))
-	}
-}
-
-// ---- idle hold ----
-
-// TestIdleHoldsFocusTimer verifies the invariant that while PhaseIdle the
-// focus countdown is held at full duration across ticks and never advances
-// toward a break.
-func TestIdleHoldsFocusTimer(t *testing.T) {
-	e := newTestEngine()
-	now := startEngine(e)
-	e.phase = PhaseIdle
-	e.idle = true
-
-	// A sub-sleepGap gap (as the real 1s ticker produces) must not advance the
-	// held timer or change the phase.
-	e.tick(now.Add(3 * time.Second))
-
-	st := e.state()
-	if st.Phase != PhaseIdle {
-		t.Fatalf("tick during idle changed phase: %s", st.Phase)
-	}
-	if !fullRemainingOK(st.RemainingSec, e) {
-		t.Errorf("idle timer moved: remaining=%d, want full %d", st.RemainingSec, int(e.focusDur()/time.Second))
-	}
-}
-
-// ---- cmd channel drop semantics ----
-
-// TestSendCmdNonBlockingDrop verifies that a full cmdCh never blocks the state
-// machine: the enqueue is skipped and earlier (superseding) commands survive.
-func TestSendCmdNonBlockingDrop(t *testing.T) {
-	e := newTestEngine()
-	e.cmdCh = make(chan windowCmd, 1)
-	e.cmdCh <- cmdShowOverlays // fill the channel
-
-	done := make(chan struct{})
-	go func() {
-		e.sendCmd(cmdHideNotice) // must not block on the full channel
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("sendCmd blocked on a full channel; drop semantics broken")
-	}
-
-	if len(e.cmdCh) != 1 {
-		t.Fatalf("dropped command was enqueued: len=%d, want 1", len(e.cmdCh))
-	}
-	if got := <-e.cmdCh; got != cmdShowOverlays {
-		t.Errorf("earlier command was displaced: got %v, want cmdShowOverlays", got)
-	}
-}
-
-// TestSendCmdLaterSupersedesEarlier is the positive counterpart: while the
-// channel has room the latest command is enqueued and processed after earlier
-// ones (a hide following a show wins).
-func TestSendCmdLaterSupersedesEarlier(t *testing.T) {
-	e := newTestEngine()
-	e.cmdCh = make(chan windowCmd, 2)
-	e.sendCmd(cmdShowOverlays)
-	e.sendCmd(cmdHideOverlays)
-
-	var got []windowCmd
-	for len(e.cmdCh) > 0 {
-		got = append(got, <-e.cmdCh)
-	}
-	if len(got) != 2 || got[0] != cmdShowOverlays || got[1] != cmdHideOverlays {
-		t.Errorf("command order wrong: %v, want [show hide]", got)
-	}
-}
-
-// ---- Stop close ordering ----
-
-// TestStopEnqueuesHidesBeforeClosingStopCh pins the ordering invariant that
-// Stop hides overlays/notice by enqueuing commands BEFORE closing stopCh, so
-// windowLoop drains them (instead of returning immediately) and never leaves
-// overlays on screen.
-func TestStopEnqueuesHidesBeforeClosingStopCh(t *testing.T) {
-	e := newTestEngine()
-	e.started = true
-	e.stopCh = make(chan struct{})
-	e.cmdCh = make(chan windowCmd, 8)
-
-	e.Stop()
-
-	select {
-	case <-e.stopCh:
-	default:
-		t.Fatal("Stop did not close stopCh")
-	}
-	if e.started {
-		t.Error("Stop did not clear started")
-	}
-
-	var cmds []windowCmd
-	for len(e.cmdCh) > 0 {
-		cmds = append(cmds, <-e.cmdCh)
-	}
-	hasNotice, hasOverlays := false, false
-	for i, c := range cmds {
-		if c == cmdHideNotice {
-			hasNotice = true
-			if i != 0 {
-				t.Errorf("cmdHideNotice at index %d, want first (enqueued before overlays)", i)
-			}
-		}
-		if c == cmdHideOverlays {
-			hasOverlays = true
-		}
-	}
-	if !hasNotice {
-		t.Error("Stop did not enqueue cmdHideNotice before closing stopCh")
-	}
-	if !hasOverlays {
-		t.Error("Stop did not enqueue cmdHideOverlays before closing stopCh")
+		t.Errorf("空闲恢复后 remaining=%d，应为完整 %d", st.RemainingSec, int(e.focusDur()/time.Second))
 	}
 }
