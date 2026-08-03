@@ -7,7 +7,7 @@
  * Single neutral slate accent, no gradients. Semantic phase colors are
  * desaturated so the UI reads as calm and sturdy rather than playful.
  * Each view paints its own solid backdrop; panels sit on top with a
- * restrained backdrop blur.
+ * translucent fill (no backdrop blur — see the .glass note below).
  */
 
 :root {
@@ -150,13 +150,17 @@
 /*
  * Reusable glass utility. Applied via class="glass" (weak) or "glass-strong".
  * Defined as plain CSS so it composes cleanly with Tailwind utilities.
- * Blur is restrained (no oversaturate) to keep the look sturdy, not glossy.
+ *
+ * No backdrop-filter here: every window is opaque (BackgroundTypeSolid) and
+ * paints its own static gradient, so the only thing ever behind a panel is
+ * that smooth gradient — blurring it is visually indistinguishable from not
+ * blurring, yet backdrop-filter is the single biggest compositing cost in the
+ * webview (each layer re-samples and re-blurs on every repaint). The frosted
+ * look is fully preserved by the translucent fill + border + top highlight.
  */
 @layer components {
   .glass {
     background: var(--glass-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     position: relative;
@@ -181,8 +185,6 @@
   }
   .glass-strong {
     background: var(--glass-bg-strong);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     position: relative;

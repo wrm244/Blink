@@ -83,9 +83,10 @@ const clock = computed(() => {
  * Current date + time, localised and precise to the second.
  * Intl.DateTimeFormat is used so the weekday/month names follow the active
  * locale (zh-CN / en). hour12:false gives a 24-hour clock in both locales,
- * which reads cleanly on a rest screen.
+ * which reads cleanly on a rest screen. The formatter is memoized on locale
+ * (constructing one does locale negotiation) rather than rebuilt every tick.
  */
-const datetime = computed(() => {
+const dateFmt = computed(() => {
   const loc = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
   return new Intl.DateTimeFormat(loc, {
     weekday: 'short',
@@ -95,8 +96,9 @@ const datetime = computed(() => {
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
-  }).format(now.value)
+  })
 })
+const datetime = computed(() => dateFmt.value.format(now.value))
 
 function skip() { BreakService.SkipBreak() }
 </script>
@@ -115,7 +117,7 @@ function skip() { BreakService.SkipBreak() }
       <div class="clock tabular-nums">{{ clock }}</div>
 
       <div class="progress" aria-hidden="true">
-        <div class="progress__fill" :style="{ width: (fraction * 100) + '%' }" />
+        <div class="progress__fill" :style="{ transform: `scaleX(${fraction})` }" />
       </div>
 
       <p class="hint">{{ t('break.hint') }}</p>
@@ -212,9 +214,12 @@ function skip() { BreakService.SkipBreak() }
 }
 .progress__fill {
   height: 100%;
+  width: 100%;
   border-radius: 9999px;
   background: var(--a);
-  transition: width 1s linear;
+  transform-origin: left center;
+  transition: transform 1s linear;
+  will-change: transform;
 }
 
 .hint {
@@ -239,7 +244,6 @@ function skip() { BreakService.SkipBreak() }
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
-  backdrop-filter: blur(12px);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
 }

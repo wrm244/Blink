@@ -367,15 +367,22 @@ func (e *Engine) GetSettings() config.Settings {
 // duration takes effect immediately by restarting the current focus period;
 // an in-progress break is left to finish naturally. A user-initiated pause is
 // preserved: the new durations apply on the next focus period after Resume.
+//
+// Only a FocusDurationMin change restarts the period: it is the one setting
+// that determines the current phase's end time, so anything else (theme,
+// language, sound, shortcuts, break lengths) must not wipe the user's
+// in-progress focus. PreBreakWarningSec needs no restart either — the tick
+// loop reads it live each second when deciding when to warn.
 func (e *Engine) ApplySettings(s config.Settings) {
 	e.mu.Lock()
+	focusChanged := s.FocusDurationMin != e.settings.FocusDurationMin
 	e.settings = s
-	if !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak) {
+	if focusChanged && !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle || e.phase == PhasePreBreak) {
 		// startFocus emits on its own; no extra emit needed here.
 		e.startFocus(time.Now())
 	} else {
-		// Break in progress or user paused: just notify the frontend that
-		// settings (e.g. BreaksUntilLong) may have changed.
+		// Break in progress, user paused, or no timing change: just notify the
+		// frontend that settings (e.g. BreaksUntilLong) may have changed.
 		e.emit()
 	}
 	e.mu.Unlock()

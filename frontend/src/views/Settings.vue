@@ -411,7 +411,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
           </div>
 
           <div v-if="onboarded && state.phase && !isPaused" class="hero__progress">
-            <div class="hero__progress-bar" :style="{ width: (progress * 100) + '%', background: phaseColor }" />
+            <div class="hero__progress-bar" :style="{ transform: `scaleX(${progress})`, background: phaseColor }" />
           </div>
 
           <div class="hero__bar">
@@ -776,7 +776,18 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 .hero__clock { text-align: right; }
 .hero__time { font-size: 34px; font-weight: 250; line-height: 1; color: var(--text); }
 .hero__progress { margin-top: 16px; height: 5px; border-radius: 9999px; background: var(--track); overflow: hidden; }
-.hero__progress-bar { height: 100%; border-radius: 9999px; transition: width 1s linear; }
+/* Fill is full-width and scaled with a GPU-composited transform, not width:
+   the per-second tick re-triggers the transition every second, and animating
+   width would force layout + paint at 60fps for the whole panel. transform
+   stays on the compositor, so the countdown costs nothing per frame. */
+.hero__progress-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: 9999px;
+  transform-origin: left center;
+  transition: transform 1s linear;
+  will-change: transform;
+}
 .hero__bar { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .hero__hint { font-size: 13px; color: var(--text-muted); }
 .hero__actions { display: flex; gap: 8px; }
@@ -923,8 +934,6 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
   padding: 10px 16px;
   border-radius: 14px;
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   transition: opacity 0.2s, transform 0.25s;
