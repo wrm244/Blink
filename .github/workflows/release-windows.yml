@@ -1,0 +1,149 @@
+name: Release Windows
+
+# Builds Blink into a Windows NSIS installer for x64 (amd64) and ARM64,
+# and attaches both to a GitHub Release when a version tag is pushed.
+#
+# Trigger: push a tag like  v0.2.0  ->  git tag v0.2.0 && git push origin v0.2.0
+# The workflow builds on a native Windows runner (CGO disabled, so arm64 is a
+# pure-Go cross-compile — no C cross-toolchain needed), packages an NSIS
+# installer that bundles the WebView2 bootstrapper + Start Menu / Desktop
+# shortcuts + uninstaller, and uploads it to the release.
+#
+# Note: the installer is unsigned (no Authenticode cert). Users may see a
+# SmartScreen / "Windows protected your PC" warning on first launch — click
+# "More info" -> "Run anyway". macOS-only platform integrations (system idle
+# detection, NSSound) degrade to no-ops via the non-darwin stubs; the tray and
+# break state machine work natively on Windows.
+
+on:
+  push:
+    tags:
+      - 'v*'          # any tag starting with v, e.g. v0.2.0
+  workflow_dispatch:   # allow manual runs from the Actions tab
+    inputs:
+      version:
+        description: 'App version for manual runs (e.g. 0.1.0-beta3). Ignored when triggered by a tag push.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write      # needed to create the release + upload assets
+
+jobs:
+  build-windows:
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both arches build on a single x64 runner: amd64 natively, arm64 via
+        # pure-Go cross-compile (CGO_ENABLED=0). NSIS on x64 happily packages
+        # an arm64 binary.
+        include:
+          - arch: amd64
+          - arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install
+
+      - name: Sync version from tag
+        id: version
+        shell: bash
+        run: |
+          # Determine the version to embed into the build:
+          #  - tag push (refs/tags/vX.Y.Z) -> strip the leading "v"
+          #  - manual dispatch with a version input -> use that
+          #  - otherwise fall back to the version already in build/config.yml
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG=$(grep -E '^  version:' build/config.yml | sed -E 's/.*version:[[:space:]]*"?([^"]*)"?/\1/')
+          fi
+          echo "Syncing app version to: $TAG"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+          # build/config.yml — source of truth consumed by wails tooling.
+          sed -i.bak -E "s/^  version:.*/  version: \"$TAG\"/" build/config.yml
+
+          # build/windows/info.json — embedded into the .exe as the Windows
+          # version resource (file Properties -> Details) via `wails3 generate
+          # syso`. Updated in place so the binary reports the right version.
+          sed -i.bak -E 's/("file_version"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"'"$TAG"'"/' build/windows/info.json
+          sed -i.bak -E 's/("ProductVersion"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"'"$TAG"'"/' build/windows/info.json
+
+          # build/windows/nsis/wails_tools.nsh — drives the installer's
+          # DisplayVersion (shown in Settings -> Apps / Add-Remove Programs).
+          # wails regenerates this file during a full `wails3 build`, but the
+          # Taskfile path uses `go build` directly, so we patch it ourselves.
+          sed -i.bak -E 's/(INFO_PRODUCTVERSION[[:space:]]+)"[^"]*"/\1"'"$TAG"'"/' build/windows/nsis/wails_tools.nsh
+
+          rm -f build/config.yml.bak build/windows/info.json.bak build/windows/nsis/wails_tools.nsh.bak
+          echo "::group::Patched info.json"
+          cat build/windows/info.json
+          echo "::endgroup::"
+
+      - name: Build + package NSIS installer
+        shell: bash
+        run: wails3 task windows:package ARCH=${{ matrix.arch }}
+
+      - name: Rename installer with version + arch
+        id: installer
+        shell: bash
+        run: |
+          # The NSIS installer is emitted as bin/blink-<arch>-installer.exe
+          # (no version in the name). Find it and rename to a release-friendly
+          # Blink-<version>-windows-<arch>-setup.exe so downloads are self-
+          # describing and don't collide with the macOS DMG assets.
+          VER="${{ steps.version.outputs.version }}"
+          SRC=$(ls bin/blink-${{ matrix.arch }}-installer.exe 2>/dev/null | head -1)
+          if [ -z "$SRC" ]; then
+            echo "No installer found in bin/"; ls -la bin/; exit 1
+          fi
+          OUT="bin/Blink-${VER}-windows-${{ matrix.arch }}-setup.exe"
+          mv "$SRC" "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Built installer: $OUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blink-windows-${{ matrix.arch }}
+          path: ${{ steps.installer.outputs.path }}
+          if-no-files-found: error
+
+      - name: Attach installer to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.installer.outputs.path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}   # v0.2.0-beta1 -> prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
