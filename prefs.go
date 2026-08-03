@@ -1,6 +1,8 @@
 package main
 
 import (
+	"runtime"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
@@ -50,6 +52,16 @@ func showPreferences() {
 	if w, ok := app.Window.GetByName(prefsWindowName); ok && w != nil {
 		w.Show()
 		w.Focus()
+		// Windows：Focus() 只调 SetForegroundWindow，后台进程（托盘常驻）
+		// 会因前台锁定机制静默失败——窗口可见但藏在别的窗口后面。用
+		// ForceForeground（AttachThreadInput 绕过前台锁）补一刀；macOS/
+		// 其它平台为空操作。LockOSThread 保证 Attach/Detach 落在同一 OS
+		// 线程上（goroutine 随时可能被调度到别的线程，否则 detach 会失败）。
+		if hwnd := w.NativeWindow(); hwnd != nil {
+			runtime.LockOSThread()
+			platform.ForceForeground(uintptr(hwnd))
+			runtime.UnlockOSThread()
+		}
 		platform.SetDockVisible(true)
 		platform.Activate()
 		return

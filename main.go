@@ -49,6 +49,15 @@ func main() {
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
+		// SingleInstance：用户再次双击二进制时不再启动新进程，而是通知
+		// 已在运行的实例把设置窗口拉到前台。回调在独立 goroutine 上触发，
+		// showPreferences 对 goroutine 调用者是安全的（已有窗口走 Show/Focus）。
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "com.blink.app",
+			OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
+				showPreferences()
+			},
+		},
 		Mac: application.MacOptions{
 			// Accessory：驻留菜单栏，无 Dock 图标和应用菜单。
 			ActivationPolicy: application.ActivationPolicyAccessory,
