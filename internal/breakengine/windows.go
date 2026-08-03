@@ -66,9 +66,10 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 			w.Show()
 		}
 	case cmdHideOverlays:
-		for _, w := range e.overlays {
-			w.Hide()
-		}
+		// Destroy the overlay windows instead of hiding them: hiding keeps the
+		// WKWebView alive and its WebKit renderer process resident in memory.
+		// They are cheap to recreate in ensureOverlays when the next break starts.
+		e.closeOverlays()
 	case cmdShowNotice:
 		e.ensureNotice()
 		if e.notice != nil {
@@ -76,7 +77,8 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 		}
 	case cmdHideNotice:
 		if e.notice != nil {
-			e.notice.Hide()
+			e.notice.Close()
+			e.notice = nil
 		}
 	}
 }

@@ -60,10 +60,9 @@ Wails window APIs (`Show`, `Hide`, `Focus`, `NewWithOptions`) internally call `I
 
 ### Menu bar / tray (`tray.go`)
 
-- `buildTray()` creates the NSStatusItem menu with action items and a left-click popover panel.
+- `buildTray()` creates the NSStatusItem menu with action items. Left-click falls through to the native menu tracking (`systrayPreClickCallback` returns 1 when no click handler is registered).
 - `trayStatusLoop()` reads engine state every second and updates the tray label (countdown) and tooltip, skipping redraws when text hasn't changed.
 - Tray menu strings are in Go (not the webview i18n). Locale is tracked in `menuLang` (`atomic.Value`) and set by `setMenuLanguage()` when settings change.
-- The left-click panel (`panel.go`) is a small translucent WebView window anchored under the status item. It auto-hides on focus loss.
 
 ### Shortcuts (`shortcuts.go`)
 
@@ -71,14 +70,13 @@ Wails window APIs (`Show`, `Hide`, `Focus`, `NewWithOptions`) internally call `I
 
 ### Frontend (`frontend/src/`)
 
-A Vue 3 SPA that uses **hash-based view switching** — the Go side opens windows at different URLs (`/#settings`, `/#break`, `/#notice`, `/#panel`), and `App.vue` reads `window.location.hash` once on mount to select the component.
+A Vue 3 SPA that uses **hash-based view switching** — the Go side opens windows at different URLs (`/#settings`, `/#break`, `/#notice`), and `App.vue` reads `window.location.hash` once on mount to select the component.
 
 | Hash | Component | Purpose |
 |------|-----------|---------|
 | (default) | `Settings.vue` | Full settings panel (time presets, sliders, shortcuts, about) |
 | `#break` | `BreakOverlay.vue` | Full-screen dark overlay with countdown during breaks |
 | `#notice` | `PreBreakNotice.vue` | Glassmorphism heads-up card before a break starts |
-| `#panel` | `Panel.vue` | Mini dashboard in the tray popover |
 
 **State flow:** The Go engine emits `blink:tick` events → Wails runtime delivers them to the frontend → components read `state.phase` to decide visibility and `state.remainingSec` / `state.totalSec` for the countdown. User actions (skip, postpone, start break) call back to Go through Wails bindings generated from `BreakService`.
 
@@ -92,6 +90,6 @@ A Vue 3 SPA that uses **hash-based view switching** — the Go side opens window
 
 - **Settings save flow:** Frontend calls `BreakService.SaveSettings(settings)` → Go persists JSON → applies to engine → goroutine rebinds shortcuts and tray menu labels.
 - **Onboarding gate:** `settings.Onboarded` is `false` by default. `ServiceStartup` opens the settings window without starting the engine. `CompleteOnboarding()` sets `Onboarded = true`, saves, and calls `engine.Start()`.
-- **Multi-monitor breaks:** `ensureOverlays()` creates one full-screen `WebviewWindow` per display (at `MacWindowLevelScreenSaver` to cover Dock and menu bar). Windows are reused when the display configuration hasn't changed; recreated on display connect/disconnect.
+- **Multi-monitor breaks:** `ensureOverlays()` creates one full-screen `WebviewWindow` per display (at `MacWindowLevelScreenSaver` to cover Dock and menu bar). Windows are reused when the display configuration hasn't changed; recreated on display connect/disconnect. When a break ends the overlays are **closed (destroyed), not hidden** — keeping the WKWebView alive would leave its WebKit renderer process resident in memory. The next break recreates them.
 - **Pause vs Idle:** Pause is user-initiated, freezes the countdown in-place with `e.paused = true` (phase unchanged). Idle is auto-detected, sets phase to `PhaseIdle` and resets to a fresh focus period on resume.
 - **`withDefaults()` pattern:** `config.Settings.withDefaults()` fills zero-value fields from `Default()` so adding new fields to the struct doesn't break existing saved files.

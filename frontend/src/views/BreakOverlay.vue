@@ -4,7 +4,7 @@ import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '../../bindings/blink'
 import { Phase } from '../../bindings/blink/internal/breakengine/models'
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight } from '@lucide/vue'
 
 const { t, locale } = useI18n()
 

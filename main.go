@@ -59,12 +59,6 @@ func main() {
 	buildTray()
 	registerAll(settings)
 
-	// The tray panel's "open settings" button emits this from the webview;
-	// route it to the shared preferences-window helper.
-	app.Event.On("blink:open-settings", func(*application.CustomEvent) {
-		showPreferences()
-	})
-
 	// Keep the menu-bar status and menu label in sync with the engine.
 	go trayStatusLoop()
 

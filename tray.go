@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	tray                *application.SystemTray
-	statusItem          *application.MenuItem
+	tray        *application.SystemTray
+	statusItem  *application.MenuItem
 	menuItemTakeBreak   *application.MenuItem
 	menuItemSkip        *application.MenuItem
 	menuItemPostpone    *application.MenuItem

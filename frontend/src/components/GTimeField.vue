@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Minus, Plus } from 'lucide-vue-next';
+import { Minus, Plus } from '@lucide/vue';
 import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{
