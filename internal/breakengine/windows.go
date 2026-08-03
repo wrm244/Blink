@@ -2,6 +2,8 @@ package breakengine
 
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"blink/internal/platform"
 )
 
 // windowCmd 是从状态机 goroutine 发送给窗口控制 goroutine 的消息（非阻塞）。
@@ -60,8 +62,16 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 	switch c {
 	case cmdShowOverlays:
 		e.ensureOverlays()
+		// 先激活应用，再显示/聚焦窗口。Blink 是 Accessory（菜单栏）应用，
+		// 遮罩弹出时焦点仍在此前的前台应用上。macOS 只对活跃应用的窗口
+		// 投递 hover/点击事件，且 makeKeyWindow 在应用未激活时无效——
+		// 表现为第一次点击只"激活窗口"被吃掉，跳过按钮要点第二下。
+		// Activate 内部是 dispatch_async 到主队列，与后续 Show/Focus
+		// 的 InvokeSync 按 FIFO 顺序执行，因此激活必然先生效。
+		platform.Activate()
 		for _, w := range e.overlays {
 			w.Show()
+			w.Focus()
 		}
 	case cmdHideOverlays:
 		// 销毁遮罩窗口而非隐藏：隐藏会保持 WKWebView 存活，

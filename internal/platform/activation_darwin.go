@@ -22,9 +22,18 @@ static void pm_set_dock_visible(int visible) {
 
 // pm_activate 将应用带到前台，使其关键窗口获得焦点。
 // 在 Accessory -> Regular 切换后需要调用，因为切换本身不会自动激活。
+// macOS 14+ 废弃了 activateIgnoringOtherApps:（在新系统上会被忽略，
+// 导致 Accessory 应用永远无法激活），改用 -[NSApplication activate]。
 static void pm_activate(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [NSApp activateIgnoringOtherApps:YES];
+        if (@available(macOS 14.0, *)) {
+            [NSApp activate];
+        } else {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            [NSApp activateIgnoringOtherApps:YES];
+            #pragma clang diagnostic pop
+        }
     });
 }
 */
