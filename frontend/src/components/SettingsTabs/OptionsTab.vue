@@ -4,22 +4,28 @@ import GlassPanel from '@/components/GlassPanel.vue'
 import GToggle from '@/components/GToggle.vue'
 import GSegmented from '@/components/GSegmented.vue'
 import { Bell, Play, PanelLeftClose } from '@lucide/vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isWindows } from '@/lib/platform'
 import type { Settings } from '@bindings/blink/internal/config/models'
 
 const { t } = useI18n()
 
-const props = defineProps<{ s: Settings }>()
+defineProps<{ s: Settings }>()
 const emit = defineEmits<{
   'update': [key: keyof Settings, value: boolean | string]
 }>()
 
-// 关闭窗口行为选项（仅 Windows 生效；macOS 关窗天然回到菜单栏，不显示此控件）。
-const closeOptions = [
+// 仅 Windows 需要这个开关：macOS 关窗天然回到菜单栏，不存在"要不要留后台"的问题。
+const showCloseAction = isWindows
+
+// 必须是 computed —— 语言是运行时切换的（i18n.global.locale.value），
+// 普通数组会把 t() 的结果固化在组件创建那一刻，切语言后标签不会更新。
+const closeOptions = computed(() => [
   { value: 'ask', label: t('options.closeAsk') },
   { value: 'background', label: t('options.closeBackground') },
   { value: 'quit', label: t('options.closeQuit') },
-]
+])
 </script>
 
 <template>
@@ -38,7 +44,7 @@ const closeOptions = [
       </div>
       <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => emit('update', 'soundEnabled', v)" />
     </GlassPanel>
-    <GlassPanel class="opt-row">
+    <GlassPanel v-if="showCloseAction" class="opt-row">
       <div class="opt-row__left">
         <span class="opt-row__label"><PanelLeftClose class="size-4" />{{ t('options.closeTitle') }}</span>
         <span class="opt-row__desc">{{ t('options.closeDesc') }}</span>

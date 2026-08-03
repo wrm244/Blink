@@ -88,7 +88,7 @@ export default {
     themeDark: "Dark",
     themeSystem: "System",
     closeTitle: "When closing the window",
-    closeDesc: "What happens after you close the settings window (Windows only).",
+    closeDesc: "What happens when you click the window's close button.",
     closeAsk: "Ask every time",
     closeBackground: "Keep in background",
     closeQuit: "Quit Blink",

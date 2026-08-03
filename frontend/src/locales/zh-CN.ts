@@ -88,7 +88,7 @@ export default {
     themeDark: "深色",
     themeSystem: "跟随系统",
     closeTitle: "关闭窗口时",
-    closeDesc: "关闭设置窗口后的行为（仅 Windows）。",
+    closeDesc: "点击窗口关闭按钮后的行为。",
     closeAsk: "每次询问",
     closeBackground: "保留在后台",
     closeQuit: "直接退出",
