@@ -98,7 +98,7 @@ jobs:
       - name: Rename DMG with arch suffix (normalize)
         id: dmg
         run: |
-          # The DMG is named Blink-<version>-<arch>.dmg. Find it and
+          # The DMG is named Blink-<version>-macos-<arch>.dmg. Find it and
           # expose the path + a clean asset name for the release.
           DMG=$(ls bin/Blink-*.dmg 2>/dev/null | head -1)
           if [ -z "$DMG" ]; then
