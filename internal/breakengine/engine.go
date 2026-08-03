@@ -5,6 +5,7 @@
 package breakengine
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -210,18 +211,21 @@ func (e *Engine) startBreak() {
 		phase = PhaseLongBreak
 	}
 	e.setPhase(phase, dur)
+	log.Printf("blink/breakengine: break started: phase=%s duration=%s (long=%v, breaksDone=%d)", phase, dur, long, e.breaksDone)
 	e.hideNotice()
 	e.showOverlays()
 	e.emit()
 }
 
 func (e *Engine) endBreak() {
-	switch e.phase {
+	ended := e.phase
+	switch ended {
 	case PhaseLongBreak:
 		e.breaksDone = 0
 	case PhaseShortBreak:
 		e.breaksDone++
 	}
+	log.Printf("blink/breakengine: break ended: phase=%s breaksDone=%d, restarting focus", ended, e.breaksDone)
 	if e.settings.SoundEnabled {
 		platform.PlaySound(soundBreakEnd)
 	}
@@ -245,6 +249,7 @@ func (e *Engine) tick(now time.Time) {
 	gap := now.Sub(e.lastTick)
 	e.lastTick = now
 	if gap > sleepGap {
+		log.Printf("blink/breakengine: sleep gap detected: gap=%s > sleepGap=%s, resetting phase=%s", gap, sleepGap, e.phase)
 		if e.phase.IsBreak() {
 			e.endBreak()
 		} else {
@@ -332,6 +337,7 @@ func (e *Engine) idleLoop() {
 				// phase, so a paused engine still reports PhaseFocusing here.
 				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
 					e.phase = PhaseIdle
+					log.Printf("blink/breakengine: idle threshold reached (%s), holding focus timer at full", threshold)
 					e.hideNotice()
 					e.hideOverlays()
 					e.emit()
@@ -339,6 +345,7 @@ func (e *Engine) idleLoop() {
 			} else {
 				e.idle = false
 				if wasIdle && e.phase == PhaseIdle {
+					log.Printf("blink/breakengine: activity resumed, restarting focus period")
 					e.startFocus(time.Now())
 				}
 			}
@@ -438,6 +445,7 @@ func (e *Engine) Pause() {
 	}
 	e.pausedRemaining = remaining
 	e.paused = true
+	log.Printf("blink/breakengine: pause: phase=%s remaining=%s", e.phase, remaining)
 	e.emit()
 }
 
@@ -458,6 +466,7 @@ func (e *Engine) Resume() {
 	e.paused = false
 	e.phaseEnd = time.Now().Add(e.pausedRemaining)
 	e.pausedRemaining = 0
+	log.Printf("blink/breakengine: resume: phase=%s remaining=%s", e.phase, e.phaseEnd.Sub(time.Now()))
 	e.emit()
 }
 
