@@ -24,15 +24,16 @@ func NewBreakService(engine *breakengine.Engine) *BreakService {
 // ServiceName 供 Wails 日志使用。
 func (s *BreakService) ServiceName() string { return "BreakService" }
 
-// ServiceStartup 由 Wails 在应用启动后调用。仅当用户已完成引导
-//（且 AutoStart 开启）时引擎才开始倒计时；否则等待 CompleteOnboarding()。
+// ServiceStartup 由 Wails 在应用启动后调用。
+//
+// 启动时始终打开设置窗口——不默认驻留托盘，让用户能直接看到并操作界面。
+// 引擎是否同时开始倒计时仍取决于引导状态与 AutoStart：已完成引导且开启
+// 自动开始时启动，否则等待 CompleteOnboarding()。
 func (s *BreakService) ServiceStartup(_ context.Context, _ application.ServiceOptions) error {
 	settings := s.engine.GetSettings()
+	showPreferences()
 	if settings.Onboarded && settings.AutoStart {
 		s.engine.Start()
-	} else if !settings.Onboarded {
-		// 首次运行：显示设置窗口，让用户在倒计时开始前完成配置。
-		showPreferences()
 	}
 	return nil
 }

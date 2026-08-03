@@ -108,6 +108,29 @@ jobs:
           cat build/windows/info.json
           echo "::endgroup::"
 
+      - name: Ensure NSIS (makensis) in PATH
+        shell: bash
+        run: |
+          # NSIS ships on windows-latest but isn't always in bash's PATH, so
+          # go-task's `makensis ...` invocation fails with "executable file not
+          # found in $PATH". Locate makensis.exe and expose its directory to
+          # every subsequent step via $GITHUB_PATH (Windows-style path).
+          set -e
+          nsis=""
+          for p in "/c/Program Files (x86)/NSIS" "/c/Program Files/NSIS"; do
+            if [ -x "$p/makensis.exe" ]; then nsis="$p"; break; fi
+          done
+          if [ -z "$nsis" ]; then
+            echo "makensis not found in default locations — installing NSIS via choco..."
+            choco install nsis -y --no-progress
+            nsis="/c/Program Files (x86)/NSIS"
+          fi
+          # Convert /c/... -> C:/... for $GITHUB_PATH (forward slashes are
+          # valid on Windows and avoid backslash-escaping headaches in bash).
+          win_dir=$(echo "$nsis" | sed 's|^/\([a-zA-Z]\)/|\U\1:/|')
+          echo "$win_dir" >> "$GITHUB_PATH"
+          echo "NSIS added to PATH: $win_dir ($( "$nsis/makensis.exe" -VERSION 2>&1 | head -1 ))"
+
       - name: Build + package NSIS installer
         shell: bash
         run: wails3 task windows:package ARCH=${{ matrix.arch }}
