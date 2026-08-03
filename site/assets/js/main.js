@@ -18,7 +18,12 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
 (function () {
   "use strict";
 
-  const ARCH_LABELS = { arm64: "Apple Silicon", amd64: "Intel Mac" };
+  const ARCH_LABELS = {
+    arm64: "Apple Silicon",
+    amd64: "Intel Mac",
+    win64: "Windows · x64",
+    winarm: "Windows · ARM64",
+  };
 
   function getRepo() {
     if (window.BLINK_REPO && window.BLINK_REPO.owner && window.BLINK_REPO.repo) {
@@ -46,6 +51,44 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
     });
   }
 
+  // 粗略识别访问者操作系统（mac / windows / other）。
+  function detectOS() {
+    const ua = navigator.userAgent || "";
+    const platform = navigator.platform || "";
+    const uaData = navigator.userAgentData;
+    if (uaData && uaData.platform) {
+      if (/Windows/i.test(uaData.platform)) return "windows";
+      if (/Mac/i.test(uaData.platform)) return "mac";
+    }
+    if (/Win/i.test(platform) || /Windows/i.test(ua)) return "windows";
+    if (/Mac/i.test(platform) || /Macintosh|Mac OS X/i.test(ua)) return "mac";
+    return "other";
+  }
+
+  // 按访问者系统把对应平台的选项排到下拉菜单最前。
+  function orderMenuForOS(dl, os) {
+    const menu = dl.querySelector(".dl-menu");
+    if (!menu) return;
+    const order =
+      os === "windows"
+        ? ["win64", "winarm", "arm64", "amd64"]
+        : ["arm64", "amd64", "win64", "winarm"];
+    const items = Array.from(menu.querySelectorAll(".dl-item"));
+    items
+      .sort((a, b) => order.indexOf(a.dataset.arch) - order.indexOf(b.dataset.arch))
+      .forEach((it) => menu.appendChild(it));
+  }
+
+  // 在当前系统的两个架构里挑一个「可用」的作为默认（资产缺失则回退到另一个）。
+  function pickDefaultArch(dl, os) {
+    const candidates = os === "windows" ? ["win64", "winarm"] : ["arm64", "amd64"];
+    for (const a of candidates) {
+      const item = dl.querySelector('.dl-item[data-arch="' + a + '"]');
+      if (item && !item.disabled) return a;
+    }
+    return "arm64";
+  }
+
   // 设置某个分体按钮当前选中的架构，并刷新主按钮指向
   function setDlArch(dl, arch, fallbackUrl) {
     const url = dl._urls && dl._urls[arch] ? dl._urls[arch] : fallbackUrl || "#";
@@ -69,6 +112,7 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
     const versionTag = document.getElementById("version-tag");
     const releasesLink = document.getElementById("releases-link");
     const dls = Array.from(document.querySelectorAll(".dl"));
+    const os = detectOS();
 
     if (releasesLink) releasesLink.href = releasesUrl;
     // 自动把占位 github.com 链接（导航/页脚）指向真实仓库
@@ -76,8 +120,12 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
       .querySelectorAll('a[href="https://github.com"]')
       .forEach((a) => (a.href = repoUrl));
 
-    // 先降级：默认 Apple Silicon 指向 Releases 页，等 API 返回再替换
-    dls.forEach((dl) => setDlArch(dl, "arm64", releasesUrl));
+    // 按访问者系统把对应平台安装包排到菜单最前，并预选为默认下载项
+    const dfltArch = os === "windows" ? "win64" : "arm64";
+    dls.forEach((dl) => {
+      orderMenuForOS(dl, os);
+      setDlArch(dl, dfltArch, releasesUrl);
+    });
 
     try {
       const res = await fetch(apiUrl, {
@@ -94,20 +142,37 @@ const REAL_REPO = { owner: "wrm244", repo: "Blink" };
       const arm = findAsset(data.assets, "-arm64.dmg") || findAsset(data.assets, ".dmg");
       const intel =
         findAsset(data.assets, "-amd64.dmg") || findAsset(data.assets, "-x64.dmg");
+      // Windows 安装包命名：Blink-<版本>-windows-<arch>-setup.exe
+      const winX64 =
+        findAsset(data.assets, "-windows-amd64-setup.exe") ||
+        findAsset(data.assets, "-amd64-setup.exe");
+      const winArm =
+        findAsset(data.assets, "-windows-arm64-setup.exe") ||
+        findAsset(data.assets, "-arm64-setup.exe");
 
       dls.forEach((dl) => {
         dl._urls = {
           arm64: arm ? arm.browser_download_url : releasesUrl,
           amd64: intel ? intel.browser_download_url : releasesUrl,
+          win64: winX64 ? winX64.browser_download_url : releasesUrl,
+          winarm: winArm ? winArm.browser_download_url : releasesUrl,
         };
-        // Intel 不存在则禁用该项
-        const intelItem = dl.querySelector('.dl-item[data-arch="amd64"]');
-        if (!intel && intelItem) {
-          intelItem.classList.add("is-disabled");
-          intelItem.disabled = true;
-        }
-        // 保持当前选中架构，刷新其下载地址
-        setDlArch(dl, dl._current || "arm64", releasesUrl);
+        // 缺失对应平台的资产时禁用该项，避免用户点到空地址
+        const disableIfMissing = (arch, asset) => {
+          const item = dl.querySelector('.dl-item[data-arch="' + arch + '"]');
+          if (item && !asset) {
+            item.classList.add("is-disabled");
+            item.disabled = true;
+          }
+        };
+        disableIfMissing("amd64", intel);
+        disableIfMissing("win64", winX64);
+        disableIfMissing("winarm", winArm);
+        // 保持当前选中（按系统预置）；若其资产缺失则回退到同平台另一架构
+        let sel = dl._current || (os === "windows" ? "win64" : "arm64");
+        const selItem = dl.querySelector('.dl-item[data-arch="' + sel + '"]');
+        if (selItem && selItem.disabled) sel = pickDefaultArch(dl, os);
+        setDlArch(dl, sel, releasesUrl);
       });
     } catch (err) {
       // 网络/限流失败：保留按钮指向 Releases 页面，版本标签降级

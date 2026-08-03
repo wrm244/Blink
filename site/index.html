@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Blink · 智能护眼休息提醒</title>
-  <meta name="description" content="Blink 是一款 macOS 菜单栏护眼提醒应用，基于 20-20-20 规则，到点温柔提醒你抬起头，让护眼成为习惯。" />
+  <meta name="description" content="Blink 是一款 macOS 与 Windows 护眼休息提醒应用，基于 20-20-20 规则，到点温柔提醒你抬起头，让护眼成为习惯。" />
   <link rel="icon" type="image/png" href="assets/images/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -43,7 +43,7 @@
         <div class="hero-logo reveal">
           <img src="assets/images/logo.png" alt="Blink Logo" width="120" height="120" />
         </div>
-        <p class="hero-eyebrow reveal">macOS 菜单栏 · 护眼提醒</p>
+        <p class="hero-eyebrow reveal">macOS / Windows · 护眼提醒</p>
         <h1 class="hero-title reveal">让眼睛，<span class="grad">按时休息</span></h1>
         <p class="hero-sub reveal">
           基于眼科医生推荐的 <strong>20-20-20 规则</strong>：每用屏 20 分钟，看 20 英尺外 20 秒。
@@ -68,7 +68,7 @@
                 <span class="dl-item-ico">🍎</span>
                 <span class="dl-item-body">
                   <span class="dl-item-title">Apple Silicon</span>
-                  <span class="dl-item-sub">M1 / M2 / M3 / M4 · 推荐</span>
+                  <span class="dl-item-sub">macOS · M1 / M2 / M3 / M4 · 推荐</span>
                 </span>
                 <span class="dl-item-check">✓</span>
               </button>
@@ -76,7 +76,23 @@
                 <span class="dl-item-ico">💻</span>
                 <span class="dl-item-body">
                   <span class="dl-item-title">Intel Mac</span>
-                  <span class="dl-item-sub">2019 及更早款 · x86_64</span>
+                  <span class="dl-item-sub">macOS · 2019 及更早款 · x86_64</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="win64" role="menuitem">
+                <span class="dl-item-ico">🪟</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Windows · x64</span>
+                  <span class="dl-item-sub">Windows 10/11 · 大多数 PC</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="winarm" role="menuitem">
+                <span class="dl-item-ico">🪟</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Windows · ARM64</span>
+                  <span class="dl-item-sub">Surface / 骁龙本 · Windows on ARM</span>
                 </span>
                 <span class="dl-item-check">✓</span>
               </button>
@@ -87,8 +103,8 @@
 
         <p class="hero-meta reveal">
           <span id="version-tag" class="version-tag">读取最新版本中…</span>
-          <span class="dot">·</span> Apple Silicon / Intel
-          <span class="dot">·</span> macOS 12+
+          <span class="dot">·</span> macOS 12+ / Windows 10+
+          <span class="dot">·</span> 免费开源
         </p>
 
         <!-- 预览截图 -->
@@ -175,7 +191,7 @@
       <div class="download-box reveal">
         <div class="download-glow" aria-hidden="true"></div>
         <h2>一键拥有你的护眼搭子</h2>
-        <p>下载最新版，拖入「应用程序」即可开始。免费、开源。</p>
+        <p>下载最新版，安装即可开始。macOS 与 Windows 均支持，免费、开源。</p>
         <div class="download-actions">
           <div class="dl" data-default="arm64">
             <a class="dl-main" href="#" aria-label="下载 Blink">
@@ -193,7 +209,7 @@
                 <span class="dl-item-ico">🍎</span>
                 <span class="dl-item-body">
                   <span class="dl-item-title">Apple Silicon</span>
-                  <span class="dl-item-sub">M1 / M2 / M3 / M4 · 推荐</span>
+                  <span class="dl-item-sub">macOS · M1 / M2 / M3 / M4 · 推荐</span>
                 </span>
                 <span class="dl-item-check">✓</span>
               </button>
@@ -201,7 +217,23 @@
                 <span class="dl-item-ico">💻</span>
                 <span class="dl-item-body">
                   <span class="dl-item-title">Intel Mac</span>
-                  <span class="dl-item-sub">2019 及更早款 · x86_64</span>
+                  <span class="dl-item-sub">macOS · 2019 及更早款 · x86_64</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="win64" role="menuitem">
+                <span class="dl-item-ico">🪟</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Windows · x64</span>
+                  <span class="dl-item-sub">Windows 10/11 · 大多数 PC</span>
+                </span>
+                <span class="dl-item-check">✓</span>
+              </button>
+              <button class="dl-item" type="button" data-arch="winarm" role="menuitem">
+                <span class="dl-item-ico">🪟</span>
+                <span class="dl-item-body">
+                  <span class="dl-item-title">Windows · ARM64</span>
+                  <span class="dl-item-sub">Surface / 骁龙本 · Windows on ARM</span>
                 </span>
                 <span class="dl-item-check">✓</span>
               </button>
@@ -210,8 +242,8 @@
           <a class="btn btn-ghost" href="https://github.com" target="_blank" rel="noopener">在 GitHub 查看</a>
         </div>
         <p class="download-note">
-          首次打开需<strong>右键 → 打开</strong>以绕过 Gatekeeper（应用为临时签名）。
-          也可前往 <a id="releases-link" href="https://github.com" target="_blank" rel="noopener">Releases 页面</a> 查看全部版本。
+          macOS 首次打开需<strong>右键 → 打开</strong>以绕过 Gatekeeper（应用为临时签名）；Windows 首次运行会弹出 SmartScreen 提示，点「仍要运行」即可。
+          也可前往 <a id="releases-link" href="https://github.com" target="_blank" rel="noopener">Releases 页面</a> 查看全部版本与校验信息。
         </p>
       </div>
     </section>
