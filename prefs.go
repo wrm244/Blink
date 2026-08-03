@@ -1,6 +1,11 @@
 package main
 
-import "github.com/wailsapp/wails/v3/pkg/application"
+import (
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
+
+	"blink/internal/platform"
+)
 
 const prefsWindowName = "pm-prefs"
 
@@ -48,10 +53,21 @@ func showPreferences() {
 	if w, ok := app.Window.GetByName(prefsWindowName); ok && w != nil {
 		w.Show()
 		w.Focus()
+		platform.SetDockVisible(true)
+		platform.Activate()
 		return
 	}
 	// Fresh creation: NewWithOptions shows the window itself (Hidden is false),
 	// whether it runs inline (app already running) or deferred (app still
 	// starting). Do not call Show()/Focus() here.
-	app.Window.NewWithOptions(preferencesOptions())
+	w := app.Window.NewWithOptions(preferencesOptions())
+	// While the settings window is open the app is a normal foreground app
+	// (Dock icon + Cmd-Tab). When it closes we return to a menu-bar-only
+	// accessory agent. The default close handler destroys the window, so each
+	// reopen is a fresh creation and re-registers this listener — no leak.
+	w.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+		platform.SetDockVisible(false)
+	})
+	platform.SetDockVisible(true)
+	platform.Activate()
 }
