@@ -51,6 +51,13 @@ function startLocalClock() {
 }
 
 onMounted(async () => {
+  // 本窗口是透明窗（window_options.go 的 noticeOptions 设 BackgroundTypeTransparent），
+  // 但全局样式给 html/body 铺了 var(--bg-from)，会把透明窗染成暗色背景。
+  // 这里把 html/body 拉回透明，只显示玻璃卡片本身，四周透出桌面。
+  // 仅作用于本 WebView 进程，不影响设置页 / 休息遮罩窗口。
+  document.documentElement.style.background = 'transparent'
+  document.body.style.background = 'transparent'
+
   const st = await BreakService.GetState()
   resync(st.remainingSec, st.totalSec)
   off = Events.On('blink:tick', (ev: { data: { remainingSec: number; totalSec: number } }) => {
