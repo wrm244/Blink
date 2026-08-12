@@ -8,6 +8,7 @@ import (
 
 	"blink/internal/breakengine"
 	"blink/internal/config"
+	"blink/internal/stats"
 )
 
 // Wails 使用 Go 的 embed 包将前端构建产物嵌入二进制文件。
@@ -19,11 +20,15 @@ var assets embed.FS
 var (
 	app    *application.App
 	engine *breakengine.Engine
+	statsStore *stats.Store
 )
 
 func init() {
 	// 注册事件，为前端提供有类型的 JS/TS API。
 	application.RegisterEvent[breakengine.State]("blink:tick")
+	// blink:nav 携带一个目标 tab 名（如 "stats"），由托盘菜单发出，
+	// 前端监听后切换到对应标签页。事件数据是字符串。
+	application.RegisterEvent[string]("blink:nav")
 }
 
 func main() {
@@ -39,6 +44,11 @@ func main() {
 	}
 
 	engine = breakengine.New(settings)
+	// 注入每日统计存储（与 settings.json 同目录），引擎在阶段切换时记录。
+	// 攒批落盘：后台 goroutine 每 30 秒同步，应用退出时强制 flush。
+	statsStore = stats.New(stats.DefaultPath())
+	statsStore.Start()
+	engine.SetStatsStore(statsStore)
 
 	app = application.New(application.Options{
 		Name:        "Blink",
@@ -81,4 +91,6 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+	// 正常退出：强制落盘未写出的统计数据。
+	statsStore.Close()
 }

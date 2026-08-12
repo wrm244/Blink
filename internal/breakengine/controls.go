@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"blink/internal/config"
+	"blink/internal/stats"
 )
 
 // ---- 公共控制方法（前端通过 Service 调用） ----
@@ -97,6 +98,7 @@ func (e *Engine) Pause() {
 	}
 	e.pausedRemaining = remaining
 	e.paused = true
+	e.pausedAt = time.Now()
 	log.Printf("blink/breakengine: 暂停：阶段=%s 剩余=%s", e.phase, remaining)
 	e.emit()
 }
@@ -115,6 +117,10 @@ func (e *Engine) Resume() {
 		return
 	}
 	e.paused = false
+	// 累计本次暂停时长，用于从统计的实际专注时长中扣除暂停部分。
+	if !e.pausedAt.IsZero() {
+		e.pausedAccum += time.Since(e.pausedAt)
+	}
 	e.phaseEnd = time.Now().Add(e.pausedRemaining)
 	e.pausedRemaining = 0
 	log.Printf("blink/breakengine: 继续：阶段=%s 剩余=%s", e.phase, e.phaseEnd.Sub(time.Now()))
@@ -127,4 +133,31 @@ func (e *Engine) Reset() {
 	defer e.mu.Unlock()
 	e.breaksDone = 0
 	e.startFocus()
+}
+
+// ---- 统计查询 ----
+
+// GetMonthlyStats 返回指定年月每天的统计数据。
+// year 用完整年份（如 2026），month 用 time.Month 枚举。
+// 未启用统计时返回空 map。
+func (e *Engine) GetMonthlyStats(year int, month int) map[int]stats.DayStats {
+	e.mu.Lock()
+	store := e.statsStore
+	e.mu.Unlock()
+	if store == nil {
+		return map[int]stats.DayStats{}
+	}
+	return store.GetMonth(year, time.Month(month))
+}
+
+// GetDayStats 返回指定日期的统计数据。
+// 未启用统计时返回零值。
+func (e *Engine) GetDayStats(year int, month int, day int) stats.DayStats {
+	e.mu.Lock()
+	store := e.statsStore
+	e.mu.Unlock()
+	if store == nil {
+		return stats.DayStats{}
+	}
+	return store.GetDay(year, time.Month(month), day)
 }

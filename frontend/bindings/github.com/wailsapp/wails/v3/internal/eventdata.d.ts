@@ -12,6 +12,7 @@ import type * as breakengine$0 from "../../../../../blink/internal/breakengine/m
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "blink:nav": string;
             "blink:tick": breakengine$0.State;
         }
     }

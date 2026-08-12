@@ -7,10 +7,11 @@ import GToggle from '@/components/GToggle.vue'
 import TimingTab from '@/components/SettingsTabs/TimingTab.vue'
 import OptionsTab from '@/components/SettingsTabs/OptionsTab.vue'
 import ShortcutsTab from '@/components/SettingsTabs/ShortcutsTab.vue'
+import StatsTab from '@/components/SettingsTabs/StatsTab.vue'
 import AboutTab from '@/components/SettingsTabs/AboutTab.vue'
 import { setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
-import { Check, Clock, Coffee, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Sparkles, Sun, Timer } from '@lucide/vue'
+import { Check, Clock, Coffee, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Sparkles, Sun, Timer, TrendingUp } from '@lucide/vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
@@ -53,8 +54,13 @@ function resolveClose(action: 'background' | 'quit' | 'cancel', remember: boolea
 }
 
 // 数据加载完成、界面渲染就绪后通知 Go 端显示窗口，避免白屏
-watch(ready, (v) => {
-  if (v) BreakService.ShowWindow()
+watch(ready, async (v) => {
+  if (v) {
+    // 托盘菜单的"统计"项会设置 pending nav，ready 后读取并切换。
+    const nav = await BreakService.GetPendingNav()
+    if (nav) tab.value = nav
+    BreakService.ShowWindow()
+  }
 })
 
 // 周期状态派生
@@ -94,6 +100,7 @@ const navGeneral = computed(() => [
   { value: 'timing', label: t('nav.timing'), icon: Timer },
   { value: 'options', label: t('nav.options'), icon: Sparkles },
   { value: 'shortcuts', label: t('nav.shortcuts'), icon: Keyboard },
+  { value: 'stats', label: t('nav.stats'), icon: TrendingUp },
   { value: 'about', label: t('nav.about'), icon: Info },
 ])
 
@@ -249,6 +256,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
               :shortcut-rows="shortcutRows" :conflict-for="conflictFor"
               @set-shortcut="(k, v) => { (s as any)[k] = v; touch() }"
             />
+            <StatsTab v-show="tab === 'stats'" />
             <AboutTab v-show="tab === 'about'" />
           </div>
 
@@ -328,25 +336,25 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
 .seg--icon { display: grid; place-items: center; padding: 5px 8px; }
 
 /* ---- 主区域 ---- */
-.main { display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; }
-.hero { padding: 20px 24px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
-.hero__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.hero__brand { display: flex; gap: 12px; align-items: center; }
-.hero__logo-img { width: 42px; height: 42px; object-fit: contain; }
-.hero__title { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-.hero__sub { margin: 3px 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.main { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; }
+.hero { padding: 14px 20px; flex-shrink: 0; animation: pm-fade-up 0.5s ease both; }
+.hero__top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.hero__brand { display: flex; gap: 10px; align-items: center; }
+.hero__logo-img { width: 32px; height: 32px; object-fit: contain; }
+.hero__title { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
+.hero__sub { margin: 2px 0 0; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
 .hero__dot { width: 7px; height: 7px; border-radius: 50%; transition: background 0.2s, box-shadow 0.2s; }
 .hero__label { font-weight: 500; }
 .hero__clock { text-align: right; }
-.hero__time { font-size: 34px; font-weight: 250; line-height: 1; color: var(--text); }
-.hero__progress { margin-top: 16px; height: 5px; border-radius: 9999px; background: var(--track); overflow: hidden; }
+.hero__time { font-size: 26px; font-weight: 250; line-height: 1; color: var(--text); }
+.hero__progress { margin-top: 10px; height: 4px; border-radius: 9999px; background: var(--track); overflow: hidden; }
 .hero__progress-bar { height: 100%; width: 100%; border-radius: 9999px; transform-origin: left center; transition: transform 1s linear; will-change: transform; }
-.hero__bar { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.hero__hint { font-size: 13px; color: var(--text-muted); }
+.hero__bar { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.hero__hint { font-size: 12.5px; color: var(--text-muted); }
 .hero__actions { display: flex; gap: 8px; }
 
 /* 引导 */
-.onboard { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 16px; }
+.onboard { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 14px; }
 .onboard__intro { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
 .onboard__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .onboard__field { display: flex; flex-direction: column; gap: 8px; }

@@ -43,10 +43,19 @@ func (e *Engine) setPhase(p Phase, dur time.Duration) {
 	e.phaseEnd = time.Now().Add(dur)
 	e.paused = false
 	e.pausedRemaining = 0
+	// 记录阶段开始时刻，供阶段结束时计算实际持续时长。
+	e.phaseStart = time.Now()
+	// 新阶段开始，清零暂停累计（上一阶段的暂停不影响本阶段统计）。
+	e.pausedAccum = 0
 }
 
 // startFocus 开始一个新的专注周期，隐藏通知和遮罩窗口。
 func (e *Engine) startFocus() {
+	// 如果当前仍在专注阶段（被 Reset/PostponeBreak/休眠等提前打断），
+	// 先记录已专注的时长，否则这部分时间会丢失。
+	if e.phase == PhaseFocusing && !e.phaseStart.IsZero() {
+		e.recordFocus()
+	}
 	e.setPhase(PhaseFocusing, e.focusDur())
 	e.hideNotice()
 	e.hideOverlays()
@@ -54,7 +63,9 @@ func (e *Engine) startFocus() {
 }
 
 // startPreBreak 开始休息前提醒阶段，显示通知窗口。
+// 专注阶段在此结束：记录实际专注时长到统计。
 func (e *Engine) startPreBreak() {
+	e.recordFocus()
 	dur := e.preDur()
 	e.setPhase(PhasePreBreak, dur)
 	e.showNotice()
@@ -66,6 +77,12 @@ func (e *Engine) startPreBreak() {
 
 // startBreak 开始一次休息（短休息或长休息），显示全屏遮罩。
 func (e *Engine) startBreak() {
+	// 手动"立即休息"会从 PhaseFocusing 直接进入 startBreak（跳过预提醒），
+	// 此时专注还没被 startPreBreak 记录，需要在此补记。
+	// 从 PhasePreBreak 进入时专注已在 startPreBreak 记录过，不重复。
+	if e.phase == PhaseFocusing {
+		e.recordFocus()
+	}
 	long := e.shouldLong()
 	dur := e.shortDur()
 	phase := PhaseShortBreak
@@ -83,6 +100,11 @@ func (e *Engine) startBreak() {
 // endBreak 结束当前休息，更新计数器并重新开始专注周期。
 func (e *Engine) endBreak() {
 	ended := e.phase
+	// 休息阶段结束：记录实际休息时长到统计。被跳过的休息仍记录
+	//（用户确实休息了一段时间），但休眠打断的休息不记录（见 detectSleepGap）。
+	if ended.IsBreak() && !e.phaseStart.IsZero() {
+		e.recordBreak(ended == PhaseLongBreak)
+	}
 	switch ended {
 	case PhaseLongBreak:
 		e.breaksDone = 0
@@ -94,6 +116,41 @@ func (e *Engine) endBreak() {
 		platform.PlaySound(soundBreakEnd)
 	}
 	e.startFocus()
+}
+
+// recordFocus 将刚结束的专注周期时长记录到统计。
+// 实际专注时长 = 墙钟跨度 - 暂停累计。如果当前正暂停（被跳过时不会，
+// 但防御性处理），把进行中的暂停也算进去。
+func (e *Engine) recordFocus() {
+	if e.statsStore == nil {
+		return
+	}
+	elapsed := time.Since(e.phaseStart)
+	paused := e.pausedAccum
+	if e.paused && !e.pausedAt.IsZero() {
+		paused += time.Since(e.pausedAt)
+	}
+	if paused > elapsed {
+		paused = elapsed
+	}
+	e.statsStore.AddFocus(time.Now(), int((elapsed-paused)/time.Second))
+}
+
+// recordBreak 将刚结束的休息时长记录到统计。
+// 实际休息时长 = 墙钟跨度 - 暂停累计。
+func (e *Engine) recordBreak(isLong bool) {
+	if e.statsStore == nil {
+		return
+	}
+	elapsed := time.Since(e.phaseStart)
+	paused := e.pausedAccum
+	if e.paused && !e.pausedAt.IsZero() {
+		paused += time.Since(e.pausedAt)
+	}
+	if paused > elapsed {
+		paused = elapsed
+	}
+	e.statsStore.AddBreak(time.Now(), int((elapsed-paused)/time.Second), isLong)
 }
 
 // ---- tick 推进逻辑（调用者持有 e.mu） ----

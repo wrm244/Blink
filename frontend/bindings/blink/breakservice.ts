@@ -18,6 +18,9 @@ import * as breakengine$0 from "./internal/breakengine/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as config$0 from "./internal/config/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as stats$0 from "./internal/stats/models.js";
 
 /**
  * AckClose 由前端在收到 blink:close-request、确认弹窗已显示后立即调用，
@@ -36,6 +39,31 @@ export function AckClose(): $CancellablePromise<void> {
  */
 export function CompleteOnboarding(): $CancellablePromise<void> {
     return $Call.ByID(1404130892);
+}
+
+/**
+ * GetDayStats 返回指定日期的统计。year 为完整年份，month 为 1-12，day 为 1-31。
+ */
+export function GetDayStats(year: number, month: number, day: number): $CancellablePromise<stats$0.DayStats> {
+    return $Call.ByID(4019884167, year, month, day);
+}
+
+/**
+ * GetMonthlyStats 返回指定年月每天的专注/休息统计。
+ * year 为完整年份（如 2026），month 为 1-12。
+ * 前端据此渲染日历热力图。返回的 map key 为日期号（1-31）。
+ */
+export function GetMonthlyStats(year: number, month: number): $CancellablePromise<{ [_ in `${number}`]?: stats$0.DayStats } | null> {
+    return $Call.ByID(738930098, year, month);
+}
+
+/**
+ * GetPendingNav 返回并清除待处理的目标 tab 名。
+ * 由托盘菜单的"统计"项设置，前端在 ready 后调用一次以切换到对应标签页。
+ * 返回空串表示无待处理导航。
+ */
+export function GetPendingNav(): $CancellablePromise<string> {
+    return $Call.ByID(3788134886);
 }
 
 /**

@@ -9,6 +9,7 @@ import (
 	"blink/internal/breakengine"
 	"blink/internal/config"
 	"blink/internal/platform"
+	"blink/internal/stats"
 )
 
 // BreakService 是前端通过 Wails 绑定调用的 Go 类型。
@@ -170,4 +171,25 @@ func (s *BreakService) ShowWindow() {
 			w.Focus()
 		}
 	}()
+}
+
+// GetMonthlyStats 返回指定年月每天的专注/休息统计。
+// year 为完整年份（如 2026），month 为 1-12。
+// 前端据此渲染日历热力图。返回的 map key 为日期号（1-31）。
+func (s *BreakService) GetMonthlyStats(year int, month int) map[int]stats.DayStats {
+	return s.engine.GetMonthlyStats(year, month)
+}
+
+// GetDayStats 返回指定日期的统计。year 为完整年份，month 为 1-12，day 为 1-31。
+func (s *BreakService) GetDayStats(year int, month int, day int) stats.DayStats {
+	return s.engine.GetDayStats(year, month, day)
+}
+
+// GetPendingNav 返回并清除待处理的目标 tab 名。
+// 由托盘菜单的"统计"项设置，前端在 ready 后调用一次以切换到对应标签页。
+// 返回空串表示无待处理导航。
+func (s *BreakService) GetPendingNav() string {
+	nav := pendingNav
+	pendingNav = ""
+	return nav
 }

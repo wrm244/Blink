@@ -12,6 +12,7 @@ import (
 
 	"blink/internal/config"
 	"blink/internal/platform"
+	"blink/internal/stats"
 )
 
 const (
@@ -46,9 +47,21 @@ type Engine struct {
 	paused bool
 	// pausedRemaining 让 Pause/Resume 在不依赖时钟运行的情况下冻结倒计时。
 	pausedRemaining time.Duration
+	// pausedAccum 累计当前阶段内处于暂停的总时长，用于从统计的
+	// 实际专注时长中扣除暂停部分。setPhase 时清零。
+	pausedAccum time.Duration
+	// pausedAt 记录本次暂停开始的时刻，Resume 时累加到 pausedAccum。
+	pausedAt time.Time
 
 	// lastTick 用于检测系统休眠（突然出现的大间隔）。
 	lastTick time.Time
+
+	// statsStore 记录每日专注/休息时长，供前端日历统计读取。
+	// 可能为 nil（未启用统计时），所有记录方法对 nil 安全。
+	statsStore *stats.Store
+	// phaseStart 记录当前阶段的开始时刻，用于在阶段结束时
+	// 计算实际持续时长并累加到统计。setPhase 每次切换都会刷新它。
+	phaseStart time.Time
 
 	app      *application.App
 	overlays []application.Window
@@ -62,6 +75,14 @@ type Engine struct {
 // New 根据给定设置创建引擎。
 func New(s config.Settings) *Engine {
 	return &Engine{settings: s}
+}
+
+// SetStatsStore 注入统计存储。必须在 Start 之前调用。
+// 传入 nil 则禁用统计记录（记录方法对 nil 安全）。
+func (e *Engine) SetStatsStore(store *stats.Store) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.statsStore = store
 }
 
 // Start 启动后台 ticker 和空闲检测器。该方法是幂等的，
@@ -191,6 +212,10 @@ func (e *Engine) idleLoop() {
 				// 而非阶段值，因为 Pause() 在不改变阶段的情况下冻结倒计时，
 				// 所以暂停的引擎在这里仍然报告 PhaseFocusing。
 				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
+					// 进入空闲前，记录已专注的时长（否则这部分会丢失）。
+					if e.phase == PhaseFocusing && !e.phaseStart.IsZero() {
+						e.recordFocus()
+					}
 					e.phase = PhaseIdle
 					log.Printf("blink/breakengine: 空闲阈值达到（%s），专注计时器保持满值", threshold)
 					e.hideNotice()

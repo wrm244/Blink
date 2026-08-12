@@ -15,6 +15,7 @@ var (
 	menuItemPauseResume   *application.MenuItem
 	menuItemStart         *application.MenuItem
 	menuItemReset         *application.MenuItem
+	menuItemStats         *application.MenuItem
 	menuItemPreferences   *application.MenuItem
 	menuItemQuit          *application.MenuItem
 	// menuLang 持有当前托盘菜单语言。它被 trayStatusLoop（以及运行在
@@ -44,6 +45,7 @@ var trayStrings = map[string]map[string]string{
 		"pauseResume": "暂停 / 继续",
 		"startFocus":  "开始专注",
 		"reset":       "重置周期",
+		"stats":       "统计…",
 		"preferences": "设置…",
 		"quit":        "退出 Blink",
 	},
@@ -54,6 +56,7 @@ var trayStrings = map[string]map[string]string{
 		"pauseResume": "Pause / Resume",
 		"startFocus":  "Start focusing",
 		"reset":       "Reset cycle",
+		"stats":       "Statistics…",
 		"preferences": "Preferences…",
 		"quit":        "Quit Blink",
 	},
@@ -92,6 +95,8 @@ func buildTray() {
 	menuItemReset = menu.Add(tr("reset"))
 	menuItemReset.OnClick(func(*application.Context) { engine.Reset() })
 	menu.AddSeparator()
+	menuItemStats = menu.Add(tr("stats"))
+	menuItemStats.OnClick(func(*application.Context) { go showStats() })
 	menuItemPreferences = menu.Add(tr("preferences"))
 	// 走 goroutine：菜单回调运行在主线程，而 showPreferences 在窗口已存在
 	// 时走 Show/Focus（内部 InvokeSync 回主线程），直接调用会自锁。
@@ -118,9 +123,27 @@ func setMenuLanguage(lang string) {
 		menuItemPauseResume.SetLabel(tr("pauseResume"))
 		menuItemStart.SetLabel(tr("startFocus"))
 		menuItemReset.SetLabel(tr("reset"))
+		menuItemStats.SetLabel(tr("stats"))
 		menuItemPreferences.SetLabel(tr("preferences"))
 		menuItemQuit.SetLabel(tr("quit"))
 	}
+}
+
+// pendingNav 持有"待打开的目标 tab"，由托盘菜单设置，前端在
+// mount/ready 后通过 GetPendingNav() 读取并清空。空串表示无待处理导航。
+var pendingNav string
+
+// showStats 打开设置窗口并切换到统计标签页。
+//
+// 复用 showPreferences 的窗口创建/显示逻辑，再设置 pendingNav 为 "stats"，
+// 前端在 ready 后读取它来切换 tab。这样首次创建窗口（前端尚未 mount，
+// 无法接收事件）和已存在窗口两种情况都能可靠地切到统计页。
+//
+// 走 goroutine：与 showPreferences 同理，菜单回调运行在主线程，
+// 而窗口已存在时 showPreferences 走 Show/Focus（InvokeSync 回主线程）。
+func showStats() {
+	pendingNav = "stats"
+	showPreferences()
 }
 
 // togglePause 根据当前暂停状态切换暂停/继续。
