@@ -82,6 +82,8 @@ export default {
     soundDesc: "A soft tone to bring you back to focus.",
     autoStart: "Auto-start on launch",
     autoStartDesc: "Begin the focus timer as soon as the app starts.",
+    launchAtLogin: "Launch at login",
+    launchAtLoginDesc: "Start Blink automatically when you sign in to your computer.",
     theme: "Appearance",
     themeDesc: "Choose light, dark, or follow the system.",
     themeLight: "Light",

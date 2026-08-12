@@ -56,6 +56,12 @@ export interface Settings {
     "autoStart": boolean;
 
     /**
+     * LaunchAtLogin 让应用在用户登录系统后自动启动。
+     * 由平台层写入系统的登录项/启动项（macOS 登录项、Windows 启动注册表）。
+     */
+    "launchAtLogin": boolean;
+
+    /**
      * Onboarded 记录用户是否已完成首次设置。
      * 在其为 true 之前引擎不运行倒计时，应用打开到设置页面而非立即倒计时。
      */

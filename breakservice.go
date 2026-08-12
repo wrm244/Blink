@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"blink/internal/breakengine"
 	"blink/internal/config"
+	"blink/internal/platform"
 )
 
 // BreakService 是前端通过 Wails 绑定调用的 Go 类型。
@@ -56,6 +58,12 @@ func (s *BreakService) SaveSettings(settings config.Settings) error {
 		registerAll(settings)
 		if settings.Language != "" {
 			setMenuLanguage(settings.Language)
+		}
+		// 开机自启属于磁盘级系统操作（登录项/注册表），放到后台同步，
+		// 避免阻塞主线程上的保存流程。dev 模式（裸二进制）下
+		// SetLaunchAtLogin 会静默失败，不中断正常保存。
+		if err := platform.SetLaunchAtLogin(settings.LaunchAtLogin); err != nil {
+			log.Printf("blink: 更新开机自启失败：%v", err)
 		}
 	}()
 	return nil

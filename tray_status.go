@@ -2,34 +2,68 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"blink/internal/breakengine"
 )
 
-// trayStatusLoop 在渲染文本变化时更新状态项标签、托盘标签和工具提示。
-// 引擎在倒计时期间每秒发出 tick 事件，专注/休息阶段的格式化标签每秒
-// 变化（暂停/空闲期间不变）。通过缓存上次的字符串，在文本相同时跳过
-// 主线程的 SetLabel/SetTooltip 调用（每次都触发原生重绘），消除暂停
-// 和空闲阶段的无效 UI 工作。
+// trayStatusLoop 监听引擎的 blink:tick 事件，在状态文本变化时更新
+// 状态项标签、托盘标签和工具提示。
+//
+// 用事件驱动取代每秒轮询 GetState()：引擎每次 tick / 阶段切换都会 emit，
+// 因此倒计时变化天然逐秒驱动这里；而暂停、空闲等状态不变时不更新，
+// 避免了轮询带来的不必要锁竞争与无变化时的重复 UI 调用。
 func trayStatusLoop() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	var lastLabel, lastTooltip string
-	for range ticker.C {
-		st := engine.GetState()
-		label, tooltip := formatStatus(st)
-		if label == lastLabel && tooltip == lastTooltip {
-			continue
+	if app == nil {
+		return
+	}
+	// 事件监听回调跑在独立 goroutine（见 Wails 的 dispatchEventToListeners），
+	// 可安全地执行主线程 UI 更新以外的逻辑；SystemTray 的 SetLabel 内部会
+	// 调度到主线程，此处非主线程调用正是安全的。
+	off := app.Event.On("blink:tick", func(ev *application.CustomEvent) {
+		st, ok := ev.Data.(breakengine.State)
+		if !ok {
+			return
 		}
-		lastLabel, lastTooltip = label, tooltip
-		if tray != nil {
-			tray.SetLabel(label)
-			tray.SetTooltip(tooltip)
-		}
-		if statusItem != nil {
-			statusItem.SetLabel(tooltip)
-		}
+		updateTrayState(st)
+	})
+	// off 用于取消监听；本 goroutine 生命周期与进程一致，无需调用。
+	_ = off
+	// 启动时先以当前状态渲染一次，避免托盘一直显示默认 "Blink"。
+	updateTrayState(engine.GetState())
+	// 阻塞直到退出：事件回调在独立的 goroutine 中执行，不在这里同步等待，
+	// 因此用一个空 channel 挂住本 goroutine 以保持监听存活。
+	select {}
+}
+
+var (
+	trayMu      sync.Mutex
+	lastLabel   string
+	lastTooltip string
+)
+
+// updateTrayState 在状态文本变化时更新托盘的三处显示。
+// tooltip 与 statusItem（菜单首项）共享同一文本，由同一缓存判断驱动，
+// 避免重复计算与无变化的无效重绘。
+func updateTrayState(st breakengine.State) {
+	label, tooltip := formatStatus(st)
+	trayMu.Lock()
+	if label == lastLabel && tooltip == lastTooltip {
+		trayMu.Unlock()
+		return
+	}
+	lastLabel, lastTooltip = label, tooltip
+	trayMu.Unlock()
+
+	if tray != nil {
+		tray.SetLabel(label)
+		tray.SetTooltip(tooltip)
+	}
+	if statusItem != nil {
+		statusItem.SetLabel(tooltip)
 	}
 }
 

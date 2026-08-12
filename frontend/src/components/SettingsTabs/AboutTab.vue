@@ -3,8 +3,11 @@
 import GlassPanel from '@/components/GlassPanel.vue'
 import { Sparkles } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
+// 从 package.json 读取版本号，避免在 UI 里硬编码导致版本漂移。
+import pkg from '../../../package.json'
 
 const { t } = useI18n()
+const version = pkg.version
 </script>
 
 <template>
@@ -14,7 +17,7 @@ const { t } = useI18n()
         <img class="about__logo-img" src="/logo.png" alt="Blink" />
         <div>
           <div class="about__name">{{ t('app.name') }}</div>
-          <div class="about__ver">{{ t('about.version') }} 0.1.0</div>
+          <div class="about__ver">{{ t('about.version') }} {{ version }}</div>
         </div>
       </div>
       <p class="about__desc">{{ t('about.description') }}</p>

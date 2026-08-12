@@ -137,11 +137,10 @@ func (e *Engine) detectSleepGap(now time.Time) bool {
 		return false
 	}
 	log.Printf("blink/breakengine: 检测到休眠间隔：gap=%s > sleepGap=%s，重置阶段=%s", gap, sleepGap, e.phase)
-	if e.phase.IsBreak() {
-		e.endBreak()
-	} else {
-		e.startFocus()
-	}
+	// 无论处于哪个阶段（专注或休息中），休眠唤醒后都重新开始专注周期。
+	// 特别注意：休息中休眠时不调用 endBreak——那会播放"休息结束"提示音，
+	// 并把一次没经历完的休息计入已完成次数。打断的休息不应被"结算"。
+	e.startFocus()
 	return true
 }
 

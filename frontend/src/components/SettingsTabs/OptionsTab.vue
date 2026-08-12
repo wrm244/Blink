@@ -3,7 +3,7 @@
 import GlassPanel from '@/components/GlassPanel.vue'
 import GToggle from '@/components/GToggle.vue'
 import GSegmented from '@/components/GSegmented.vue'
-import { Bell, Play, PanelLeftClose } from '@lucide/vue'
+import { Bell, Play, PanelLeftClose, Power } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isWindows } from '@/lib/platform'
@@ -36,6 +36,13 @@ const closeOptions = computed(() => [
         <span class="opt-row__desc">{{ t('options.autoStartDesc') }}</span>
       </div>
       <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => emit('update', 'autoStart', v)" />
+    </GlassPanel>
+    <GlassPanel class="opt-row">
+      <div class="opt-row__left">
+        <span class="opt-row__label"><Power class="size-4" />{{ t('options.launchAtLogin') }}</span>
+        <span class="opt-row__desc">{{ t('options.launchAtLoginDesc') }}</span>
+      </div>
+      <GToggle :model-value="s.launchAtLogin" @update:model-value="(v: boolean) => emit('update', 'launchAtLogin', v)" />
     </GlassPanel>
     <GlassPanel class="opt-row">
       <div class="opt-row__left">

@@ -45,6 +45,9 @@ type Settings struct {
 	// AutoStart 在应用启动后（完成引导后）自动开始专注计时。
 	// 为 false 时用户从托盘手动启动。
 	AutoStart bool `json:"autoStart"`
+	// LaunchAtLogin 让应用在用户登录系统后自动启动。
+	// 由平台层写入系统的登录项/启动项（macOS 登录项、Windows 启动注册表）。
+	LaunchAtLogin bool `json:"launchAtLogin"`
 	// Onboarded 记录用户是否已完成首次设置。
 	// 在其为 true 之前引擎不运行倒计时，应用打开到设置页面而非立即倒计时。
 	Onboarded bool `json:"onboarded"`

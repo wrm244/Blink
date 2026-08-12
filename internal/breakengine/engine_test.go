@@ -84,9 +84,11 @@ func TestTickSleepGapResetsFocusPeriod(t *testing.T) {
 	}
 }
 
-// TestTickSleepGapDuringBreakEndsBreak 是一个恢复测试：休眠后过期的
-// 休息必须被结束（且短休息计数器递增），而不是让用户卡在过期的休息遮罩上。
-func TestTickSleepGapDuringBreakEndsBreak(t *testing.T) {
+// TestTickSleepGapDuringBreakResetsFocus 是一个回归测试：休眠后过期的
+// 休息必须被重置回专注周期，而不是让用户卡在过期的休息遮罩上；同时
+// 一次没经历完的休息不应被"结算"——不播放结束音（无副作用可测）、
+// 不递增短休息计数器。
+func TestTickSleepGapDuringBreakResetsFocus(t *testing.T) {
 	e := newTestEngine()
 	now := startEngine(e)
 	e.startBreak()
@@ -100,8 +102,9 @@ func TestTickSleepGapDuringBreakEndsBreak(t *testing.T) {
 	if e.phase != PhaseFocusing {
 		t.Fatalf("休息期间休眠间隔后阶段=%s，应为 focusing", e.phase)
 	}
-	if e.breaksDone != 1 {
-		t.Errorf("结束短休息后 breaksDone=%d，应为 1", e.breaksDone)
+	// 被打断的休息不应计入已完成次数。
+	if e.breaksDone != 0 {
+		t.Errorf("休息被休眠打断后 breaksDone=%d，应为 0（不应结算未完成的休息）", e.breaksDone)
 	}
 }
 

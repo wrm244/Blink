@@ -93,7 +93,10 @@ func buildTray() {
 	menuItemReset.OnClick(func(*application.Context) { engine.Reset() })
 	menu.AddSeparator()
 	menuItemPreferences = menu.Add(tr("preferences"))
-	menuItemPreferences.OnClick(func(*application.Context) { showPreferences() })
+	// 走 goroutine：菜单回调运行在主线程，而 showPreferences 在窗口已存在
+	// 时走 Show/Focus（内部 InvokeSync 回主线程），直接调用会自锁。
+	// 与 tray_platform_windows.go 的 OnDoubleClick 同理。
+	menuItemPreferences.OnClick(func(*application.Context) { go showPreferences() })
 	menu.AddSeparator()
 	menuItemQuit = menu.Add(tr("quit"))
 	menuItemQuit.OnClick(func(*application.Context) { app.Quit() })
