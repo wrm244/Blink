@@ -4,6 +4,8 @@ import (
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"blink/internal/platform"
 )
 
 var (
@@ -48,6 +50,7 @@ var trayStrings = map[string]map[string]string{
 		"stats":       "统计…",
 		"preferences": "设置…",
 		"quit":        "退出 Blink",
+		"statusIdle":  "空闲",
 	},
 	"en": {
 		"takeBreak":   "Take a break now",
@@ -59,6 +62,7 @@ var trayStrings = map[string]map[string]string{
 		"stats":       "Statistics…",
 		"preferences": "Preferences…",
 		"quit":        "Quit Blink",
+		"statusIdle":  "Idle",
 	},
 }
 
@@ -113,9 +117,23 @@ func buildTray() {
 	applyTrayPlatform(tray, menu)
 }
 
+// resolveMenuLanguage 把设置的语言值解析为托盘实际使用的语言：
+// 显式设置（zh-CN/en）优先；空值（跟随系统）时按系统语言解析；
+// 系统语言也不支持时回退中文。
+func resolveMenuLanguage(lang string) string {
+	if lang == "zh-CN" || lang == "en" {
+		return lang
+	}
+	if l := platform.SystemLanguage(); l != "" {
+		return l
+	}
+	return "zh-CN"
+}
+
 // setMenuLanguage 为指定语言重建托盘菜单项标签。
+// 传入空串表示跟随系统，内部按系统语言解析。
 func setMenuLanguage(lang string) {
-	menuLang.Store(lang)
+	menuLang.Store(resolveMenuLanguage(lang))
 	if menuItemTakeBreak != nil {
 		menuItemTakeBreak.SetLabel(tr("takeBreak"))
 		menuItemSkip.SetLabel(tr("skip"))
@@ -131,23 +149,57 @@ func setMenuLanguage(lang string) {
 
 // pendingNav 持有"待打开的目标 tab"，由托盘菜单设置，前端在
 // mount/ready 后通过 GetPendingNav() 读取并清空。空串表示无待处理导航。
-var pendingNav string
+//
+// 跨 goroutine 读写（showStats 在托盘菜单回调 goroutine 写入，GetPendingNav
+// 在 Wails 绑定调用线程读取），用 atomic.Value 保证无数据竞争。
+var pendingNav atomic.Value // 存 string
+
+// setPendingNav 记录待处理导航 tab 名。
+func setPendingNav(tab string) {
+	pendingNav.Store(tab)
+}
+
+// takePendingNav 读取并清空待处理导航。
+func takePendingNav() string {
+	v := pendingNav.Load()
+	if v == nil {
+		return ""
+	}
+	s := v.(string)
+	pendingNav.Store("")
+	return s
+}
 
 // showStats 打开设置窗口并切换到统计标签页。
 //
-// 复用 showPreferences 的窗口创建/显示逻辑，再设置 pendingNav 为 "stats"，
-// 前端在 ready 后读取它来切换 tab。这样首次创建窗口（前端尚未 mount，
-// 无法接收事件）和已存在窗口两种情况都能可靠地切到统计页。
+// 复用 showPreferences 的窗口创建/显示逻辑，再切换到统计 tab。分两条路径：
+//   - 窗口已存在：直接发 blink:nav 事件，前端监听后切换 tab（无需重建窗口）。
+//     此时不写 pendingNav——前端已挂载不会重新读取，写了只会残留并污染
+//     下次窗口重建后的首次加载。
+//   - 窗口不存在：写入 pendingNav，前端在首次 mount 后通过 GetPendingNav 读取。
+//
+// 两条路径互补，覆盖两种情况。极端时序（窗口已创建但前端尚未挂载完成，
+// 事件丢失）下，之前写入的 pendingNav 仍会被前端 mount 后取走，兜底有效。
 //
 // 走 goroutine：与 showPreferences 同理，菜单回调运行在主线程，
 // 而窗口已存在时 showPreferences 走 Show/Focus（InvokeSync 回主线程）。
 func showStats() {
-	pendingNav = "stats"
+	if w, ok := app.Window.GetByName(prefsWindowName); ok && w != nil {
+		app.Event.Emit("blink:nav", "stats")
+		showPreferences()
+		return
+	}
+	setPendingNav("stats")
 	showPreferences()
 }
 
 // togglePause 根据当前暂停状态切换暂停/继续。
 func togglePause() {
+	// 引擎未运行（引导完成但 AutoStart 关闭，或尚未完成引导）时暂停/继续
+	// 没有意义：Pause 会冻结一个不存在的倒计时。直接忽略点击。
+	if !engine.IsStarted() {
+		return
+	}
 	if engine.GetState().Paused {
 		engine.Resume()
 	} else {

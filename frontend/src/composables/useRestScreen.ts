@@ -10,7 +10,16 @@ export function useRestScreen() {
   const quote = ref('')
   const quoteMeta = ref('')
   const bgUrl = ref('')
-  const dayKey = new Date().toISOString().slice(0, 10)
+
+  /** 按本地日期生成缓存键（"YYYY-MM-DD"）。
+   *  不能用 toISOString()——那是 UTC 日期，UTC+8 时区在本地凌晨 0-8 点
+   *  会拿到"昨天"的键，缓存与本地日期错位。 */
+  function localDayKey(d: Date): string {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
 
   /** 并行获取每日一句和 Bing 壁纸 */
   function enrichRestScreen() {
@@ -37,6 +46,9 @@ export function useRestScreen() {
 
   /** 获取 Bing 每日壁纸（按天缓存） */
   async function fetchBing() {
+    // 每次调用实时计算：应用跨天运行（凌晨前打开、之后休息）时，
+    // 模块加载时的日期键已过期，必须用当前本地日期。
+    const dayKey = localDayKey(new Date())
     try {
       const cached = sessionStorage.getItem('pm:bing')
       if (cached) {

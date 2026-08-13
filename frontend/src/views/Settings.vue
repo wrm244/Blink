@@ -35,6 +35,7 @@ const { s, state, dirty, saved, ready, touch, save, discard, completeOnboarding,
 // macOS 不安装关闭钩子，因此永远收不到该事件，弹窗也就不会出现。
 const closeAsk = ref(false)
 let offCloseAsk: (() => void) | undefined
+let offNav: (() => void) | undefined
 onMounted(() => {
   offCloseAsk = Events.On('blink:close-request', () => {
     closeAsk.value = true
@@ -42,8 +43,16 @@ onMounted(() => {
     // 接下来等多久都属于他的思考时间，不该被自动收场打断。
     BreakService.AckClose()
   })
+  // 托盘菜单的"统计"项在窗口已存在时通过 blink:nav 事件请求切 tab
+  // （窗口首次创建时走 GetPendingNav，见 tray.go showStats）。
+  offNav = Events.On('blink:nav', (ev: { data: string }) => {
+    if (ev.data) tab.value = ev.data
+  })
 })
-onUnmounted(() => offCloseAsk?.())
+onUnmounted(() => {
+  offCloseAsk?.()
+  offNav?.()
+})
 
 function resolveClose(action: 'background' | 'quit' | 'cancel', remember: boolean) {
   closeAsk.value = false

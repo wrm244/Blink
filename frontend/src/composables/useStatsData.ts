@@ -100,11 +100,18 @@ export function useStatsData() {
 }
 
 // fmtDuration 将秒数格式化为人类可读时长，如 "1时23分" / "20分" / "45秒"。
-export function fmtDuration(sec: number): string {
+// locale 为 'en' 时输出英文格式（"1h 23m" / "20m" / "45s"），
+// 避免英文界面下混入中文字符。
+export function fmtDuration(sec: number, locale: 'zh' | 'en' = 'zh'): string {
   if (sec <= 0) return '0'
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
   const s = sec % 60
+  if (locale === 'en') {
+    if (h > 0) return `${h}h ${m}m`
+    if (m > 0) return `${m}m${s > 0 ? ` ${s}s` : ''}`
+    return `${s}s`
+  }
   if (h > 0) return `${h}时${m}分`
   if (m > 0) return `${m}分${s > 0 ? s + '秒' : ''}`
   return `${s}秒`

@@ -105,22 +105,28 @@ func (s *Store) load() {
 
 // flush 将内存数据序列化并写入磁盘。仅当有未落盘的修改（dirty）时执行。
 // 内部自取锁，可从任意 goroutine 调用。
+//
+// 序列化与写盘都在锁内完成：若在锁外写盘，两个并发 flush（定时 flush 与
+// 退出时 Close 的 flush 相遇）时，后完成的写盘会用旧快照覆盖新数据，
+// 且 dirty 已被清除，内存中的新数据从此不再落盘——重启后丢失统计。
+// 锁内写盘保证 dirty 与磁盘状态一致。数据量小（每日几条），毫秒级 IO。
 func (s *Store) flush() {
 	if s.path == "" {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.dirty {
-		s.mu.Unlock()
 		return
 	}
 	data, err := json.MarshalIndent(s.data, "", "  ")
-	s.dirty = false
-	s.mu.Unlock()
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(s.path, data, 0o644)
+	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+		return
+	}
+	s.dirty = false
 }
 
 // AddFocus 向指定日期累加专注秒数。日期取自 t 的本地日期。

@@ -69,13 +69,22 @@ func updateTrayState(st breakengine.State) {
 
 // formatStatus 根据引擎状态生成托盘标签和工具提示。
 func formatStatus(st breakengine.State) (label, tooltip string) {
+	// 暂停优先：倒计时冻结，继续显示剩余时间会误导（看起来还在走）。
+	// 空闲（PhaseIdle）本质是自动暂停，同样显示暂停态。
+	if st.Paused || st.Phase == breakengine.PhaseIdle {
+		rem := time.Duration(st.RemainingSec) * time.Second
+		label := "⏸"
+		tip := tr("pauseResume")
+		if st.Phase == breakengine.PhaseIdle {
+			tip = tr("statusIdle")
+		}
+		return label, "Blink · " + tip + " · " + fmtDuration(rem)
+	}
 	rem := time.Duration(st.RemainingSec) * time.Second
 	switch st.Phase {
 	case breakengine.PhaseFocusing, breakengine.PhasePreBreak,
 		breakengine.PhaseShortBreak, breakengine.PhaseLongBreak:
 		return fmtDuration(rem), "Blink · " + trStatus(st, rem)
-	case breakengine.PhaseIdle:
-		return "⏸", "Blink · " + tr("pauseResume")
 	default:
 		// 引擎未运行（如引导前）。
 		return "Blink", "Blink"

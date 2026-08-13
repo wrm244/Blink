@@ -118,3 +118,44 @@ func TestStopEnqueuesHidesBeforeClosingStopCh(t *testing.T) {
 		t.Error("Stop 未在关闭 stopCh 前入队 cmdHideOverlays")
 	}
 }
+
+// ---- 预提醒时长截断测试 ----
+
+// TestStartPreBreakCapsDurationToRemaining 是回归测试：专注接近尾声时用户
+// 把提醒时长调大（如剩余 10 秒时调到 60 秒），提醒阶段必须按剩余时间走，
+// 否则 setPhase 会把提醒阶段固定为完整时长，休息被额外推迟。
+func TestStartPreBreakCapsDurationToRemaining(t *testing.T) {
+	e := newTestEngine()
+	startEngine(e)
+	// 模拟专注已接近尾声：剩余 10 秒，而提醒时长是 60 秒。
+	e.phaseEnd = time.Now().Add(10 * time.Second)
+	e.settings.PreBreakWarningSec = 60
+
+	e.startPreBreak()
+
+	if e.phase != PhasePreBreak {
+		t.Fatalf("startPreBreak 后阶段=%s，应为 prebreak", e.phase)
+	}
+	// 提醒阶段时长应被截断为剩余时间（~10s），而非完整 60s。
+	got := e.phaseEnd.Sub(time.Now())
+	if !within(got, 10*time.Second, 2*time.Second) {
+		t.Errorf("提醒阶段时长=%v，应为 ~10s（截断），而不是完整的 60s", got)
+	}
+}
+
+// TestStartPreBreakKeepsFullDurationWhenPlentyRemaining 验证提醒时长
+// 短于剩余专注时间时不做截断（正常路径不受影响）。
+func TestStartPreBreakKeepsFullDurationWhenPlentyRemaining(t *testing.T) {
+	e := newTestEngine()
+	startEngine(e)
+	// 剩余 5 分钟，提醒时长 10 秒：不截断。
+	e.phaseEnd = time.Now().Add(5 * time.Minute)
+	e.settings.PreBreakWarningSec = 10
+
+	e.startPreBreak()
+
+	got := e.phaseEnd.Sub(time.Now())
+	if !within(got, 10*time.Second, 2*time.Second) {
+		t.Errorf("提醒阶段时长=%v，应为完整的 ~10s", got)
+	}
+}

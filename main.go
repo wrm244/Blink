@@ -38,10 +38,10 @@ func main() {
 		settings = config.Default()
 	}
 
-	// 在构建菜单前从已保存的设置初始化托盘菜单语言。
-	if settings.Language == "zh-CN" || settings.Language == "en" {
-		menuLang.Store(settings.Language)
-	}
+	// 在构建菜单前初始化托盘菜单语言。显式设置优先；空值（跟随系统）
+	// 时 setMenuLanguage 内部按系统语言解析，与前端 detectSystemLocale
+	// 保持一致，避免界面英文、托盘中文的分裂。
+	setMenuLanguage(settings.Language)
 
 	engine = breakengine.New(settings)
 	// 注入每日统计存储（与 settings.json 同目录），引擎在阶段切换时记录。

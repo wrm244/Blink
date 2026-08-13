@@ -19,6 +19,9 @@ export function useEngineState() {
 
   // 上次保存的设置快照，用于 Discard 恢复。
   let savedSnapshot: Settings | null = null
+  // editVersion 每次编辑递增，用于识别保存期间是否又发生了新的编辑
+  // （async save 竞态：保存请求在途时用户继续改，返回后不能把 dirty 复位）。
+  let editVersion = 0
 
   onMounted(async () => {
     Object.assign(s, await BreakService.GetSettings())
@@ -30,14 +33,24 @@ export function useEngineState() {
   onUnmounted(() => off?.())
 
   /** 标记为有未保存的更改 */
-  function touch() { dirty.value = true; saved.value = false }
+  function touch() { dirty.value = true; saved.value = false; editVersion++ }
 
-  /** 保存设置到后端 */
-  async function save() {
-    await BreakService.SaveSettings({ ...s })
+  /** 保存设置到后端。返回是否成功。 */
+  async function save(): Promise<boolean> {
+    const v = editVersion
+    try {
+      await BreakService.SaveSettings({ ...s })
+    } catch (err) {
+      // 保存失败：保持 dirty，让用户看到"未保存"状态后重试。
+      console.error('保存设置失败', err)
+      return false
+    }
+    // 保存期间用户又改了别的字段：不要吞掉新编辑，保持 dirty。
+    if (v !== editVersion) return true
     savedSnapshot = { ...s }
     dirty.value = false
     saved.value = true
+    return true
   }
 
   /**
@@ -65,7 +78,13 @@ export function useEngineState() {
   /** 完成引导流程 */
   async function completeOnboarding() {
     s.onboarded = true
-    await BreakService.SaveSettings({ ...s })
+    try {
+      await BreakService.SaveSettings({ ...s })
+    } catch (err) {
+      // 保存失败：保持未完成状态，用户可重试。
+      console.error('保存引导设置失败', err)
+      return
+    }
     savedSnapshot = { ...s }
     await BreakService.CompleteOnboarding()
     dirty.value = false

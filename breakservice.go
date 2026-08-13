@@ -57,9 +57,10 @@ func (s *BreakService) SaveSettings(settings config.Settings) error {
 	s.engine.ApplySettings(settings)
 	go func() {
 		registerAll(settings)
-		if settings.Language != "" {
-			setMenuLanguage(settings.Language)
-		}
+		// 语言为空表示"跟随系统"：resolveMenuLanguage 内部按系统语言解析，
+		// 因此无条件同步托盘菜单语言（否则用户把语言改回跟随系统后，
+		// 托盘仍停留在旧语言）。
+		setMenuLanguage(settings.Language)
 		// 开机自启属于磁盘级系统操作（登录项/注册表），放到后台同步，
 		// 避免阻塞主线程上的保存流程。dev 模式（裸二进制）下
 		// SetLaunchAtLogin 会静默失败，不中断正常保存。
@@ -80,9 +81,7 @@ func (s *BreakService) CompleteOnboarding() error {
 	}
 	s.engine.ApplySettings(settings)
 	go registerAll(settings)
-	if settings.Language != "" {
-		go setMenuLanguage(settings.Language)
-	}
+	go setMenuLanguage(settings.Language)
 	s.engine.Start()
 	return nil
 }
@@ -189,7 +188,5 @@ func (s *BreakService) GetDayStats(year int, month int, day int) stats.DayStats 
 // 由托盘菜单的"统计"项设置，前端在 ready 后调用一次以切换到对应标签页。
 // 返回空串表示无待处理导航。
 func (s *BreakService) GetPendingNav() string {
-	nav := pendingNav
-	pendingNav = ""
-	return nav
+	return takePendingNav()
 }

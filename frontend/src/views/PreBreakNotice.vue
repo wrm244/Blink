@@ -8,6 +8,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
 import { BreakService } from '@bindings/blink'
+import type { State } from '@bindings/blink/internal/breakengine/models'
 import GButton from '@/components/GButton.vue'
 
 const { t } = useI18n()
@@ -23,14 +24,24 @@ const progress = computed(() =>
 // 之后本地按真实秒边界递减，不再依赖后端每秒 emit 的稳定性。
 let endAt = 0
 let seeded = false
+let paused = false
 let secTimer: number | undefined
 let off: (() => void) | undefined
 
 // 用后端值重新锚定本地倒计时。首次（seeded=false）无条件对齐；
 // 之后仅在漂移 >= 2 秒时重新对齐，避免后端偶发跳秒（10→8）覆盖掉
 // 我们平滑的每秒递减。本地已归零后不再被后端拉回，防止末尾 0→1→0 闪烁。
-function resync(sec: number, tot: number) {
+//
+// 暂停时（isPaused=true）直接跟随后端冻结值：后端暂停后不再推进倒计时，
+// 本地时钟若继续递减会走到 0 卡住（休息却迟迟不来），Resume 后才跳回。
+function resync(sec: number, tot: number, isPaused?: boolean) {
+  if (typeof isPaused === 'boolean') paused = isPaused
   if (tot > 0) total.value = tot
+  // 暂停：后端已冻结，本地同步显示冻结值，不递减。
+  if (paused) {
+    remaining.value = sec
+    return
+  }
   if (sec <= 0) { remaining.value = 0; return }
   if (!seeded || Math.abs(sec - remaining.value) >= 2) {
     remaining.value = sec
@@ -41,10 +52,13 @@ function resync(sec: number, tot: number) {
 
 // 对齐到下一秒边界的本地计时器：每次重新调度而非 setInterval，
 // 避免回调延迟累积漂移（与休息遮罩墙钟同思路）。
+// 暂停期间保持显示冻结值，不推进倒计时。
 function startLocalClock() {
   const tick = () => {
-    const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000))
-    remaining.value = left
+    if (!paused) {
+      const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000))
+      remaining.value = left
+    }
     secTimer = window.setTimeout(tick, 1000 - (Date.now() % 1000))
   }
   tick()
@@ -59,9 +73,9 @@ onMounted(async () => {
   document.body.style.background = 'transparent'
 
   const st = await BreakService.GetState()
-  resync(st.remainingSec, st.totalSec)
-  off = Events.On('blink:tick', (ev: { data: { remainingSec: number; totalSec: number } }) => {
-    resync(ev.data.remainingSec, ev.data.totalSec)
+  resync(st.remainingSec, st.totalSec, st.paused)
+  off = Events.On('blink:tick', (ev: { data: State }) => {
+    resync(ev.data.remainingSec, ev.data.totalSec, ev.data.paused)
   })
   startLocalClock()
 })

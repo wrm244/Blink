@@ -67,6 +67,12 @@ func (e *Engine) startFocus() {
 func (e *Engine) startPreBreak() {
 	e.recordFocus()
 	dur := e.preDur()
+	// 若剩余专注时间不足提醒时长（典型场景：专注已接近尾声时用户
+	// 把提醒时长调大），提醒阶段按剩余时间走，避免休息被额外推迟——
+	// 否则 setPhase 会把提醒阶段固定为完整的 preDur，休息反而更晚开始。
+	if rem := time.Until(e.phaseEnd); rem > 0 && rem < dur {
+		dur = rem
+	}
 	e.setPhase(PhasePreBreak, dur)
 	e.showNotice()
 	if e.settings.SoundEnabled {
@@ -160,8 +166,11 @@ func (e *Engine) tick(now time.Time) {
 	if e.paused {
 		// 暂停时保持 lastTick 新鲜，这样长时间暂停不会在下次活动 tick 时
 		// 被误判为系统休眠（否则会重置专注周期并丢失用户的 Resume）。
-		// 不触发 emit：状态已冻结（Pause/Resume 在实际切换时才 emit）。
+		// 仍然 emit：状态虽冻结（remaining 恒定），但依赖 tick 事件的
+		// 下游（托盘状态、休息前提醒窗口的本地时钟）需要感知"仍处于暂停"，
+		// 否则它们会各自继续递减/显示过期状态。
 		e.lastTick = now
+		e.emit()
 		return
 	}
 

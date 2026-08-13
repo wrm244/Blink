@@ -10,6 +10,8 @@ import { useStatsData, fmtDuration, fmtMinutes, intensity } from '@/composables/
 import type { State } from '@bindings/blink/internal/breakengine/models'
 
 const { t, locale } = useI18n()
+// 时长格式化按界面语言输出（fmtDuration 不依赖 vue-i18n，需手动传）。
+const durLocale = computed(() => (locale.value === 'zh-CN' ? 'zh' : 'en'))
 const { year, month, dayMap, loading, selectedDay, monthSummary, selectedStats, reload, prevMonth, nextMonth, prevYear, nextYear, goToday } = useStatsData()
 
 // 周标题：周一开头（中文习惯）。en locale 用周日开头。
@@ -117,11 +119,11 @@ onUnmounted(() => offTick?.())
       </div>
       <div class="summary__grid">
         <div class="summary__cell">
-          <div class="summary__value tabular-nums">{{ fmtDuration(monthSummary.focusSec) }}</div>
+          <div class="summary__value tabular-nums">{{ fmtDuration(monthSummary.focusSec, durLocale) }}</div>
           <div class="summary__label"><Clock class="size-3" />{{ t('stats.focusTotal') }}</div>
         </div>
         <div class="summary__cell">
-          <div class="summary__value tabular-nums">{{ fmtDuration(monthSummary.breakSec) }}</div>
+          <div class="summary__value tabular-nums">{{ fmtDuration(monthSummary.breakSec, durLocale) }}</div>
           <div class="summary__label"><Coffee class="size-3" />{{ t('stats.breakTotal') }}</div>
         </div>
         <div class="summary__cell">
@@ -195,12 +197,12 @@ onUnmounted(() => offTick?.())
         <div class="detail__row">
           <Clock class="size-4 detail__icon" />
           <span class="detail__label">{{ t('stats.focusTime') }}</span>
-          <span class="detail__value tabular-nums">{{ fmtDuration(selectedStats.focusSec) }}</span>
+          <span class="detail__value tabular-nums">{{ fmtDuration(selectedStats.focusSec, durLocale) }}</span>
         </div>
         <div class="detail__row">
           <Coffee class="size-4 detail__icon" />
           <span class="detail__label">{{ t('stats.breakTime') }}</span>
-          <span class="detail__value tabular-nums">{{ fmtDuration(selectedStats.breakSec) }}</span>
+          <span class="detail__value tabular-nums">{{ fmtDuration(selectedStats.breakSec, durLocale) }}</span>
         </div>
         <div class="detail__row">
           <span class="detail__label">{{ t('stats.shortBreaks') }}</span>
