@@ -42,6 +42,7 @@ func (e *Engine) setPhase(p Phase, dur time.Duration) {
 	e.total = dur
 	e.phaseEnd = time.Now().Add(dur)
 	e.paused = false
+	e.autoPaused = false
 	e.pausedRemaining = 0
 	// 记录阶段开始时刻，供阶段结束时计算实际持续时长。
 	e.phaseStart = time.Now()

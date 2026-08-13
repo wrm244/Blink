@@ -39,17 +39,19 @@ PhaseFocusing → PhasePreBreak (heads-up) → PhaseShortBreak / PhaseLongBreak 
 ```
 - `loop()` ticks every second, advances the phase when timers expire, and emits `blink:tick` events (a `State` struct) to the frontend.
 - `idleLoop()` polls `platform.IdleSeconds()` (CGo → CGEventSource) every 5s. When idle exceeds the threshold, the phase becomes `PhaseIdle` (focus timer held at full); activity resets to `PhaseFocusing`.
+- A separate 1s poll (`externalSuspendLoop`) runs `checkExternalSuspend()`: when a meeting (mic input active) or media playback (audio output active) is detected, the countdown is frozen with `autoPaused` (edge-triggered, so a manual Resume is not immediately re-paused); the timer resumes automatically once the condition clears. Auto-pause skips breaks/idle phases, hides the notice/overlay while active, and re-shows the notice if the pre-break phase resumes. `Start()` resets the detection flags so a restart during an active meeting/media re-triggers the pause.
 - System sleep is detected by a >5s gap between ticks; the focus period resets rather than firing a stale break.
 - **Window ops are funneled through a dedicated goroutine** (`windowLoop`) via a buffered channel (`cmdCh`). The engine mutex is never held while calling Wails window APIs (which marshal to the main thread internally — holding the mutex across that would deadlock against binding calls).
 
 **`config.Settings`** (`internal/config/settings.go`) is the single settings struct, persisted as JSON to `~/Library/Application Support/Blink/settings.json`. `Load()` fills missing fields with defaults so old files survive new-field additions. `Save()` creates the directory if needed.
 
-**`internal/platform/`** uses CGo and build constraints (`//go:build darwin`) for three macOS-specific operations:
+**`internal/platform/`** uses CGo and build constraints (`//go:build darwin`) for these macOS-specific operations:
 - `IdleSeconds()` — HID idle time via `CGEventSourceSecondsSinceLastEventType`.
+- `AudioActivity()` — one pass over the audio process list (own PID excluded) returning whether any process has an active input (mic) or output stream, via `kAudioHardwarePropertyProcessObjectList` + `kAudioProcessPropertyIsRunningInput/Output`. Used for meeting/media auto-pause.
 - `PlaySound()` — plays named system sounds via `NSSound`.
 - `SetDockVisible()` / `Activate()` — toggles `NSApp.activationPolicy` between Regular (Dock shown, settings open) and Accessory (menu-bar-only).
 
-Non-darwin stubs (`*_other.go`) degrade gracefully: `IdleSeconds` returns 0, `PlaySound` is a no-op.
+Non-darwin stubs (`*_other.go`) degrade gracefully: `IdleSeconds` returns 0, `PlaySound` is a no-op, `AudioActivity` returns false, false.
 
 ### Main-thread deadlock discipline (important)
 

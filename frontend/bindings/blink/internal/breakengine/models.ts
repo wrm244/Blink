@@ -55,4 +55,20 @@ export interface State {
     "shortBreakCount": number;
     "idle": boolean;
     "paused": boolean;
+
+    /**
+     * AutoPaused 为 true 时表示暂停由会议/媒体检测自动触发，
+     * 条件消失后引擎会自动恢复；用户手动暂停时它为 false。
+     */
+    "autoPaused": boolean;
+
+    /**
+     * Meeting 报告当前是否检测到会议/通话（麦克风被使用）。
+     */
+    "meeting": boolean;
+
+    /**
+     * MediaPlaying 报告当前是否检测到媒体播放（音频输出活跃）。
+     */
+    "mediaPlaying": boolean;
 }

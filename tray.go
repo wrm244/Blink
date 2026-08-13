@@ -51,6 +51,8 @@ var trayStrings = map[string]map[string]string{
 		"preferences": "设置…",
 		"quit":        "退出 Blink",
 		"statusIdle":  "空闲",
+		"statusAutoMeeting": "会议/通话中，计时已暂停",
+		"statusAutoMedia":    "媒体播放中，计时已暂停",
 	},
 	"en": {
 		"takeBreak":   "Take a break now",
@@ -63,6 +65,8 @@ var trayStrings = map[string]map[string]string{
 		"preferences": "Preferences…",
 		"quit":        "Quit Blink",
 		"statusIdle":  "Idle",
+		"statusAutoMeeting": "In a meeting/call, timer paused",
+		"statusAutoMedia":    "Media playing, timer paused",
 	},
 }
 

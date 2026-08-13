@@ -45,6 +45,13 @@ type Engine struct {
 
 	idle   bool
 	paused bool
+	// autoPaused 标记当前暂停是否由会议/媒体检测自动触发。
+	// 为 true 时条件消失会自动恢复；用户手动 Pause 时它为 false。
+	autoPaused bool
+	// meeting/media 记录最近一次外部检测的结果，用于边沿检测
+	// （条件从不活跃变为活跃时触发自动暂停）。
+	meeting bool
+	media   bool
 	// pausedRemaining 让 Pause/Resume 在不依赖时钟运行的情况下冻结倒计时。
 	pausedRemaining time.Duration
 	// pausedAccum 累计当前阶段内处于暂停的总时长，用于从统计的
@@ -99,11 +106,13 @@ func (e *Engine) Start() {
 	e.app = application.Get()
 	now := time.Now()
 	e.lastTick = now
+	e.resetExternalState()
 	e.startFocus()
 	e.mu.Unlock()
 
 	go e.loop()
 	go e.idleLoop()
+	go e.externalSuspendLoop()
 	go e.windowLoop()
 }
 
@@ -140,7 +149,7 @@ func (e *Engine) app_() *application.App {
 
 // state 生成当前引擎状态的快照。调用者需持有互斥锁。
 func (e *Engine) state() State {
-	st := State{Phase: e.phase, Idle: e.idle, Paused: e.paused, ShortBreakCount: e.breaksDone}
+	st := State{Phase: e.phase, Idle: e.idle, Paused: e.paused, AutoPaused: e.autoPaused, Meeting: e.meeting, MediaPlaying: e.media, ShortBreakCount: e.breaksDone}
 	if e.settings.EnableLongBreaks {
 		st.BreaksUntilLong = e.settings.LongBreakInterval - e.breaksDone
 		if st.BreaksUntilLong < 0 {

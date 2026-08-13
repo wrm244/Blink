@@ -75,8 +75,17 @@ func formatStatus(st breakengine.State) (label, tooltip string) {
 		rem := time.Duration(st.RemainingSec) * time.Second
 		label := "⏸"
 		tip := tr("pauseResume")
-		if st.Phase == breakengine.PhaseIdle {
+		switch {
+		case st.Phase == breakengine.PhaseIdle:
 			tip = tr("statusIdle")
+		case st.AutoPaused:
+			if st.Meeting {
+				tip = tr("statusAutoMeeting")
+			} else if st.MediaPlaying {
+				tip = tr("statusAutoMedia")
+			} else {
+				tip = tr("pauseResume")
+			}
 		}
 		return label, "Blink · " + tip + " · " + fmtDuration(rem)
 	}

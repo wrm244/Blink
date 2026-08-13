@@ -42,6 +42,12 @@ type Settings struct {
 	EnableLongBreaks bool `json:"enableLongBreaks"`
 	// SoundEnabled 切换休息结束提示音和休息前提醒音。
 	SoundEnabled bool `json:"soundEnabled"`
+	// PauseOnMeeting 检测到会议/通话（任何应用正在使用麦克风）时自动暂停计时，
+	// 结束后自动恢复。
+	PauseOnMeeting bool `json:"pauseOnMeeting"`
+	// PauseOnMedia 检测到媒体播放（任何应用正在输出音频，如看视频/听音乐）时
+	// 自动暂停计时，结束后自动恢复。
+	PauseOnMedia bool `json:"pauseOnMedia"`
 	// AutoStart 在应用启动后（完成引导后）自动开始专注计时。
 	// 为 false 时用户从托盘手动启动。
 	AutoStart bool `json:"autoStart"`
@@ -84,6 +90,8 @@ func Default() Settings {
 		IdleThresholdMin:      5,
 		EnableLongBreaks:      true,
 		SoundEnabled:          true,
+		PauseOnMeeting:        true,
+		PauseOnMedia:          true,
 		AutoStart:             true,
 		Onboarded:             false,
 		Language:              "",

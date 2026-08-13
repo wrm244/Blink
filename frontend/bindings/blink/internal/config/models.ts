@@ -50,6 +50,18 @@ export interface Settings {
     "soundEnabled": boolean;
 
     /**
+     * PauseOnMeeting 检测到会议/通话（任何应用正在使用麦克风）时自动暂停计时，
+     * 结束后自动恢复。
+     */
+    "pauseOnMeeting": boolean;
+
+    /**
+     * PauseOnMedia 检测到媒体播放（任何应用正在输出音频，如看视频/听音乐）时
+     * 自动暂停计时，结束后自动恢复。
+     */
+    "pauseOnMedia": boolean;
+
+    /**
      * AutoStart 在应用启动后（完成引导后）自动开始专注计时。
      * 为 false 时用户从托盘手动启动。
      */

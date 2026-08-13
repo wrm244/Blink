@@ -37,6 +37,18 @@ func (e *Engine) ApplySettings(s config.Settings) {
 	e.mu.Lock()
 	focusChanged := s.FocusDurationMin != e.settings.FocusDurationMin
 	e.settings = s
+	// 被关闭的开关对应的检测标志清零：若自动暂停的原因被全部关闭，
+	// 立即恢复计时；之后重新打开开关时，若条件仍活跃会以边沿形式
+	// 再次触发自动暂停。
+	if !s.PauseOnMeeting {
+		e.meeting = false
+	}
+	if !s.PauseOnMedia {
+		e.media = false
+	}
+	if e.autoPaused && !e.meeting && !e.media {
+		e.autoResume()
+	}
 	if focusChanged && !e.paused && (e.phase == PhaseFocusing || e.phase == PhaseIdle) {
 		// startFocus 自身会 emit，此处无需额外 emit。
 		e.startFocus()
@@ -117,6 +129,9 @@ func (e *Engine) Resume() {
 		return
 	}
 	e.paused = false
+	// 手动 Resume 同时解除自动暂停标记：用户接管后，只要检测条件没有
+	// 先消失再出现（边沿），就不会被重新自动暂停。
+	e.autoPaused = false
 	// 累计本次暂停时长，用于从统计的实际专注时长中扣除暂停部分。
 	if !e.pausedAt.IsZero() {
 		e.pausedAccum += time.Since(e.pausedAt)

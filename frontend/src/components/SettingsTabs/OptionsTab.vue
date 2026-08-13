@@ -3,7 +3,7 @@
 import GlassPanel from '@/components/GlassPanel.vue'
 import GToggle from '@/components/GToggle.vue'
 import GSegmented from '@/components/GSegmented.vue'
-import { Bell, Play, PanelLeftClose, Power } from '@lucide/vue'
+import { Bell, MonitorPlay, PanelLeftClose, Play, Power, Video } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isWindows } from '@/lib/platform'
@@ -50,6 +50,20 @@ const closeOptions = computed(() => [
         <span class="opt-row__desc">{{ t('options.soundDesc') }}</span>
       </div>
       <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => emit('update', 'soundEnabled', v)" />
+    </GlassPanel>
+    <GlassPanel class="opt-row">
+      <div class="opt-row__left">
+        <span class="opt-row__label"><Video class="size-4" />{{ t('options.pauseOnMeeting') }}</span>
+        <span class="opt-row__desc">{{ t('options.pauseOnMeetingDesc') }}</span>
+      </div>
+      <GToggle :model-value="s.pauseOnMeeting" @update:model-value="(v: boolean) => emit('update', 'pauseOnMeeting', v)" />
+    </GlassPanel>
+    <GlassPanel class="opt-row">
+      <div class="opt-row__left">
+        <span class="opt-row__label"><MonitorPlay class="size-4" />{{ t('options.pauseOnMedia') }}</span>
+        <span class="opt-row__desc">{{ t('options.pauseOnMediaDesc') }}</span>
+      </div>
+      <GToggle :model-value="s.pauseOnMedia" @update:model-value="(v: boolean) => emit('update', 'pauseOnMedia', v)" />
     </GlassPanel>
     <GlassPanel v-if="showCloseAction" class="opt-row">
       <div class="opt-row__left">
