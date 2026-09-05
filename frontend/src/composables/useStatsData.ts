@@ -27,6 +27,10 @@ export function useStatsData() {
         if (v) out[Number(k)] = v
       }
       dayMap.value = out
+    } catch (err) {
+      // 后端调用失败：保留已显示的数据，记录错误即可。
+      // 若不 catch，异常会穿透所有调用点成为 unhandled rejection。
+      console.error('加载统计数据失败', err)
     } finally {
       loading.value = false
     }

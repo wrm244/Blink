@@ -40,6 +40,7 @@ let off: (() => void) | undefined
 // 暂停时（isPaused=true）直接跟随后端冻结值：后端暂停后不再推进倒计时，
 // 本地时钟若继续递减会走到 0 卡住（休息却迟迟不来），Resume 后才跳回。
 function resync(sec: number, tot: number, isPaused?: boolean) {
+  const wasPaused = paused
   if (typeof isPaused === 'boolean') paused = isPaused
   if (tot > 0) total.value = tot
   // 暂停：后端已冻结，本地同步显示冻结值，不递减。
@@ -48,7 +49,10 @@ function resync(sec: number, tot: number, isPaused?: boolean) {
     return
   }
   if (sec <= 0) { remaining.value = 0; return }
-  if (!seeded || Math.abs(sec - remaining.value) >= 2) {
+  // 暂停→恢复的瞬间必须无条件重锚：endAt 还停留在暂停前的时间戳，
+  // 若不重锚，本地时钟会立刻按陈旧的 endAt 算出 0，界面闪 0 约 1 秒，
+  // 直到下一个后端 tick 因漂移 >= 2 秒才拉回真实值。
+  if (wasPaused || !seeded || Math.abs(sec - remaining.value) >= 2) {
     remaining.value = sec
     endAt = Date.now() + sec * 1000
     seeded = true

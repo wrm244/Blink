@@ -44,13 +44,16 @@ export function useRestScreen() {
     }
   }
 
-  /** 获取 Bing 每日壁纸（按天缓存） */
+  /** 获取 Bing 每日壁纸（按天缓存）。
+   *  用 localStorage 而非 sessionStorage：遮罩窗口在每次休息结束即被销毁
+   *  （Go 侧释放 webview 内存），sessionStorage 随窗口销毁，缓存必然 miss；
+   *  localStorage 跨窗口持久，同一天内只下载一次壁纸。 */
   async function fetchBing() {
     // 每次调用实时计算：应用跨天运行（凌晨前打开、之后休息）时，
     // 模块加载时的日期键已过期，必须用当前本地日期。
     const dayKey = localDayKey(new Date())
     try {
-      const cached = sessionStorage.getItem('pm:bing')
+      const cached = localStorage.getItem('pm:bing')
       if (cached) {
         const parsed = JSON.parse(cached)
         if (parsed?.day === dayKey && typeof parsed.url === 'string') {
@@ -70,7 +73,7 @@ export function useRestScreen() {
       // urls 按分辨率从高到低排序，urls[0] 是 1920×1080 变体
       const url = urls[0]
       try {
-        sessionStorage.setItem('pm:bing', JSON.stringify({ day: dayKey, url }))
+        localStorage.setItem('pm:bing', JSON.stringify({ day: dayKey, url }))
       } catch { /* 存储已满 - 缓存是尽力而为的 */ }
       bgUrl.value = url
     } catch {

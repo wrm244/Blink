@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os/exec"
+	"runtime"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -170,6 +172,22 @@ func (s *BreakService) ShowWindow() {
 			w.Focus()
 		}
 	}()
+}
+
+// OpenURL 用系统默认浏览器打开外部链接（如 GitHub 仓库页）。
+// WebView 内的 window.open 在 WKWebView 中不会调起系统浏览器，
+// 因此外部链接必须经由此方法交给操作系统处理。
+func (s *BreakService) OpenURL(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 // GetMonthlyStats 返回指定年月每天的专注/休息统计。

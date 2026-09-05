@@ -251,6 +251,39 @@ func TestTickOnceProbesWhenSwitchOn(t *testing.T) {
 	}
 }
 
+// ---- 缺陷 5：休息/空闲期间仍每秒执行 CGo 音频探测 ----
+//
+// applyExternalSuspend 对休息和空闲阶段整体丢弃探测结果（这两个阶段
+// 不更新检测标志），探测了也是白探——每次 ~2ms 的 CGo 遍历纯属空转，
+// 空闲一小时的机器要白付 3600 次。生产路径（tickOnce）必须在这些阶段
+// 直接跳过探测。
+func TestTickOnceSkipsProbeDuringBreakAndIdle(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		phase Phase
+	}{
+		{"短休息", PhaseShortBreak},
+		{"长休息", PhaseLongBreak},
+		{"空闲", PhaseIdle},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newTestEngine()
+			e.settings.PauseOnMeeting = true
+			startEngine(e)
+			e.setPhase(tc.phase, time.Minute)
+
+			calls := 0
+			e.audioProbe = func() (bool, bool) { calls++; return true, true }
+
+			e.tickOnce(time.Now())
+
+			if calls != 0 {
+				t.Errorf("%s 期间仍探测音频 %d 次，应为 0（结果会被整体丢弃）", tc.name, calls)
+			}
+		})
+	}
+}
+
 // TestReEnableSwitchStillTriggersAfterSkip 锁住跳过探测的副作用：
 // 跳过期间必须清零检测标志，否则重新打开开关后首轮检测形不成边沿，
 // 条件明明还活跃却不会自动暂停。

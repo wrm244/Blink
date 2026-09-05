@@ -247,6 +247,17 @@ func (e *Engine) loop(stopCh chan struct{}) {
 // 单独抽成方法而不是内联在 loop 里，是为了让"探测期间不得持有引擎锁"
 // 这类并发契约能被测试直接验证——否则测试只能去驱动真实的 ticker。
 func (e *Engine) tickOnce(now time.Time) {
+	// 先短暂持锁读取阶段和探测开关：休息/空闲期间 applyExternalSuspend
+	// 会整体丢弃探测结果（这两个阶段不更新检测标志，语义上探测了也白探），
+	// 与其每秒白付一次 ~2ms 的 CGo 遍历，不如直接跳过——空闲一小时的
+	// 机器就省下 3600 次无效探测。注意要在锁外读 phase 快照后再放锁，
+	// 与 probeExternal 的"锁外探测、锁内应用"纪律一致。
+	if !e.probeNeeded() {
+		e.mu.Lock()
+		e.tick(now)
+		e.mu.Unlock()
+		return
+	}
 	// 探测在锁外完成（CGo 调用约 2ms，见 probeExternal 的说明），
 	// 只把结果的应用与状态机推进留在临界区内。
 	meeting, media, probed := e.probeExternal()
@@ -254,6 +265,20 @@ func (e *Engine) tickOnce(now time.Time) {
 	e.applyExternalResult(meeting, media, probed)
 	e.tick(now)
 	e.mu.Unlock()
+}
+
+// probeNeeded 报告本轮是否值得执行音频探测。调用者不应持有锁。
+// false 的情形：两个自动暂停开关都关闭（探测结果必然无效），或当前
+// 处于休息/空闲阶段（探测结果会被 applyExternalSuspend 整体丢弃）。
+// 休息/空闲期间条件发生变化没有意义——阶段结束后条件若仍活跃，会以
+// "边沿"形式再次触发自动暂停（见 applyExternalSuspend 的说明）。
+func (e *Engine) probeNeeded() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.settings.PauseOnMeeting && !e.settings.PauseOnMedia {
+		return false
+	}
+	return !e.phase.IsBreak() && e.phase != PhaseIdle
 }
 
 // idleLoop 定期采样系统空闲时间，当用户不活动超过阈值时

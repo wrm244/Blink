@@ -100,7 +100,11 @@ function stop() {
 const display = computed(() => (props.modelValue && props.modelValue.length ? props.modelValue : props.placeholder))
 
 onUnmounted(() => {
-  if (recording.value) stop()
+  // 无条件清理：录制结束（录到有效键或 Escape）后 recording 已为 false，
+  // 但 window 监听器仍在挂着（只靠 guard 空转）。此时若组件卸载，
+  // 旧的实现会跳过清理，监听器连同组件闭包一起泄漏。
+  // removeEventListener 对未注册的监听器是幂等的，无需条件判断。
+  stop()
 })
 </script>
 

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"blink/internal/atomicfile"
 )
 
 // DayStats 是单日的统计聚合。
@@ -123,7 +125,9 @@ func (s *Store) flush() {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
+	// 原子写入：写入中途崩溃不会留下截断损坏的统计文件
+	//（那会丢掉全部历史记录，load 只能静默忽略坏文件）。
+	if err := atomicfile.WriteFile(s.path, data, 0o644); err != nil {
 		return
 	}
 	s.dirty = false

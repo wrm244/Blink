@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"blink/internal/atomicfile"
 )
 
 // 关闭窗口时的可选行为，对应 Settings.CloseAction。
@@ -231,5 +233,7 @@ func Save(s Settings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	// 原子写入：进程在写入中途崩溃时不会留下截断损坏的设置文件
+	//（那会让用户的全部配置在下次启动时静默回退默认值）。
+	return atomicfile.WriteFile(path, data, 0o644)
 }

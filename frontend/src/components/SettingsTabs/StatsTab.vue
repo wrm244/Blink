@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // StatsTab - 统计标签页：日历热力图 + 当月汇总 + 选中日详情列表。
 import GlassPanel from '@/components/GlassPanel.vue'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee, Activity, CalendarCheck } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee, Activity, CalendarCheck, Zap, Hourglass } from '@lucide/vue'
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'

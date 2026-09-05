@@ -81,6 +81,15 @@ export function GetState(): $CancellablePromise<breakengine$0.State> {
 }
 
 /**
+ * OpenURL 用系统默认浏览器打开外部链接（如 GitHub 仓库页）。
+ * WebView 内的 window.open 在 WKWebView 中不会调起系统浏览器，
+ * 因此外部链接必须经由此方法交给操作系统处理。
+ */
+export function OpenURL(url: string): $CancellablePromise<void> {
+    return $Call.ByID(1998364963, url);
+}
+
+/**
  * Pause 冻结倒计时。
  */
 export function Pause(): $CancellablePromise<void> {

@@ -4,6 +4,7 @@
 // 其余为静态行。无图标、无 logo——设置页 hero 已有品牌区，这里保持克制。
 import GlassPanel from '@/components/GlassPanel.vue'
 import { ArrowUpRight } from '@lucide/vue'
+import { BreakService } from '@bindings/blink'
 import { useI18n } from 'vue-i18n'
 // 从 package.json 读取版本号，避免在 UI 里硬编码导致版本漂移。
 import pkg from '../../../package.json'
@@ -12,8 +13,9 @@ const { t } = useI18n()
 const version = pkg.version
 const repoUrl = 'https://github.com/wrm244/Blink'
 
+// WebView 内 window.open 无法调起系统浏览器，须经 Go 侧 OpenURL 打开。
 function openRepo() {
-  window.open(repoUrl, '_blank')
+  BreakService.OpenURL(repoUrl)
 }
 </script>
 
