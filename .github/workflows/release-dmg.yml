@@ -1,12 +1,12 @@
 name: Release DMG
 
-# Builds Blink into a macOS .dmg for Apple Silicon (arm64) and Intel
-# (amd64), and attaches both to a GitHub Release when a version tag is pushed.
+# Builds Blink into a macOS .dmg for Apple Silicon (arm64) only, and attaches
+# it to a GitHub Release when a version tag is pushed.
 #
 # Trigger: push a tag like  v0.2.0  ->  git tag v0.2.0 && git push origin v0.2.0
-# The workflow builds on a native macOS runner for each arch (so CGO/macOS
-# frameworks build natively, no cross-compile headaches), packages a drag-to-
-# Install .dmg, and uploads it to the release with auto-generated release notes.
+# The workflow builds on a native macOS-26 (Apple Silicon) runner so CGO/macOS
+# frameworks build natively, packages a drag-to-Install .dmg, and uploads it to
+# the release with auto-generated release notes.
 #
 # Note: the .app is ad-hoc signed (not Developer ID / notarised). Users open it
 # the first time via right-click -> Open (Gatekeeper workaround). See README.
@@ -27,19 +27,8 @@ permissions:
 
 jobs:
   build-dmg:
-    name: Build DMG (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # Native macOS 26 runners per arch: arm64 on macos-26, x64 on
-        # macos-26-intel. Each builds natively so CGO + macOS frameworks link
-        # correctly.
-        include:
-          - arch: arm64
-            runner: macos-26
-          - arch: amd64
-            runner: macos-26-intel
+    name: Build DMG (Apple Silicon)
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -110,7 +99,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Blink-dmg-${{ matrix.arch }}
+          name: Blink-dmg-arm64
           path: ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
 
