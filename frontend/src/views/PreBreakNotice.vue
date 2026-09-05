@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 休息前提醒 - 主显示器顶部滑入的提示卡片（窗口透明，见 window_options.go noticeOptions）
+// 窗口四周透出桌面，卡片自身铺不透明主题底色（--notice-surface）保证可读。
 // 视觉上完全对齐设置页 hero 卡片的三段结构（top → progress → bar）：
 //   hero__top    图标 + 标题 | 大号细体时钟      →  top    图标芯片 + 标题 | 倒计时
 //   hero__progress 通栏进度条（phase 色填充）    →  progress 同款 3px 进度条
@@ -138,8 +139,10 @@ function postpone() { BreakService.PostponeBreak() }
   box-sizing: border-box;
 }
 
-/* 卡片本体交给 .glass-strong 提供表面（半透明填充 + 发丝边框 + 顶部高光），
-   这里只负责布局与圆角（16px = rounded-2xl，与设置页面板一致），不覆盖其背景/边框。 */
+/* 卡片布局与圆角（16px = rounded-2xl，与设置页面板一致）。
+   背景自绘不透明主题底色（--notice-surface）：窗口是全透明的，
+   单靠玻璃填充在深色主题下只有 7% 白，在 Windows（无原生毛玻璃）
+   上等于没有背景。边框/顶部高光/阴影仍由 .glass-strong 提供。 */
 .notice {
   display: flex;
   flex-direction: column;
@@ -152,6 +155,7 @@ function postpone() { BreakService.PostponeBreak() }
   color: var(--text);
   user-select: none;
   animation: pm-fade-up 0.35s ease both;
+  background: var(--notice-surface);
 }
 
 /* ---- 顶部行：与 hero__top 同构 ---- */
