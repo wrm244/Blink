@@ -103,6 +103,9 @@ export default {
   },
   options: {
     title: "Options",
+    groupGeneral: "General",
+    groupAutoPause: "Auto pause",
+    groupWindow: "Window",
     longBreaks: "Enable long breaks",
     longBreaksDesc: "Insert occasional longer breaks into the cycle.",
     sound: "Play a chime when a break ends",

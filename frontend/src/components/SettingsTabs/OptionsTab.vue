@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// OptionsTab - 选项标签页：长休息、音效、自动开始开关、关闭窗口行为。
+// OptionsTab - 选项标签页：分组列表风格（与时间页/关于页同构）。
+// 通用 / 自动暂停 / 窗口（仅 Windows）三组；行为开关用 GToggle，
+// 关闭行为用 GSegmented。行排版与 GTimeField 一致（13.5px 标签 + 11.5px 描述）。
 import GlassPanel from '@/components/GlassPanel.vue'
 import GToggle from '@/components/GToggle.vue'
 import GSegmented from '@/components/GSegmented.vue'
-import { Bell, MonitorPlay, PanelLeftClose, Play, Power, Video } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isWindows } from '@/lib/platform'
@@ -30,51 +31,65 @@ const closeOptions = computed(() => [
 
 <template>
   <section v-show="true" class="panel-stack">
-    <GlassPanel class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><Play class="size-4" />{{ t('options.autoStart') }}</span>
-        <span class="opt-row__desc">{{ t('options.autoStartDesc') }}</span>
+    <!-- 通用 -->
+    <GlassPanel class="grp">
+      <div class="grp__title">{{ t('options.groupGeneral') }}</div>
+      <div class="row">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.autoStart') }}</div>
+          <div class="row__desc">{{ t('options.autoStartDesc') }}</div>
+        </div>
+        <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => emit('update', 'autoStart', v)" />
       </div>
-      <GToggle :model-value="s.autoStart" @update:model-value="(v: boolean) => emit('update', 'autoStart', v)" />
+      <div class="row">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.launchAtLogin') }}</div>
+          <div class="row__desc">{{ t('options.launchAtLoginDesc') }}</div>
+        </div>
+        <GToggle :model-value="s.launchAtLogin" @update:model-value="(v: boolean) => emit('update', 'launchAtLogin', v)" />
+      </div>
+      <div class="row">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.sound') }}</div>
+          <div class="row__desc">{{ t('options.soundDesc') }}</div>
+        </div>
+        <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => emit('update', 'soundEnabled', v)" />
+      </div>
     </GlassPanel>
-    <GlassPanel class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><Power class="size-4" />{{ t('options.launchAtLogin') }}</span>
-        <span class="opt-row__desc">{{ t('options.launchAtLoginDesc') }}</span>
+
+    <!-- 自动暂停 -->
+    <GlassPanel class="grp">
+      <div class="grp__title">{{ t('options.groupAutoPause') }}</div>
+      <div class="row">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.pauseOnMeeting') }}</div>
+          <div class="row__desc">{{ t('options.pauseOnMeetingDesc') }}</div>
+        </div>
+        <GToggle :model-value="s.pauseOnMeeting" @update:model-value="(v: boolean) => emit('update', 'pauseOnMeeting', v)" />
       </div>
-      <GToggle :model-value="s.launchAtLogin" @update:model-value="(v: boolean) => emit('update', 'launchAtLogin', v)" />
+      <div class="row">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.pauseOnMedia') }}</div>
+          <div class="row__desc">{{ t('options.pauseOnMediaDesc') }}</div>
+        </div>
+        <GToggle :model-value="s.pauseOnMedia" @update:model-value="(v: boolean) => emit('update', 'pauseOnMedia', v)" />
+      </div>
     </GlassPanel>
-    <GlassPanel class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><Bell class="size-4" />{{ t('options.sound') }}</span>
-        <span class="opt-row__desc">{{ t('options.soundDesc') }}</span>
+
+    <!-- 窗口（仅 Windows） -->
+    <GlassPanel v-if="showCloseAction" class="grp">
+      <div class="grp__title">{{ t('options.groupWindow') }}</div>
+      <div class="row row--wrap">
+        <div class="row__text">
+          <div class="row__label">{{ t('options.closeTitle') }}</div>
+          <div class="row__desc">{{ t('options.closeDesc') }}</div>
+        </div>
+        <GSegmented
+          :options="closeOptions"
+          :model-value="s.closeAction || 'ask'"
+          @update:model-value="(v: string) => emit('update', 'closeAction', v)"
+        />
       </div>
-      <GToggle :model-value="s.soundEnabled" @update:model-value="(v: boolean) => emit('update', 'soundEnabled', v)" />
-    </GlassPanel>
-    <GlassPanel class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><Video class="size-4" />{{ t('options.pauseOnMeeting') }}</span>
-        <span class="opt-row__desc">{{ t('options.pauseOnMeetingDesc') }}</span>
-      </div>
-      <GToggle :model-value="s.pauseOnMeeting" @update:model-value="(v: boolean) => emit('update', 'pauseOnMeeting', v)" />
-    </GlassPanel>
-    <GlassPanel class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><MonitorPlay class="size-4" />{{ t('options.pauseOnMedia') }}</span>
-        <span class="opt-row__desc">{{ t('options.pauseOnMediaDesc') }}</span>
-      </div>
-      <GToggle :model-value="s.pauseOnMedia" @update:model-value="(v: boolean) => emit('update', 'pauseOnMedia', v)" />
-    </GlassPanel>
-    <GlassPanel v-if="showCloseAction" class="opt-row">
-      <div class="opt-row__left">
-        <span class="opt-row__label"><PanelLeftClose class="size-4" />{{ t('options.closeTitle') }}</span>
-        <span class="opt-row__desc">{{ t('options.closeDesc') }}</span>
-      </div>
-      <GSegmented
-        :options="closeOptions"
-        :model-value="s.closeAction || 'ask'"
-        @update:model-value="(v: string) => emit('update', 'closeAction', v)"
-      />
     </GlassPanel>
   </section>
 </template>
@@ -86,8 +101,27 @@ const closeOptions = computed(() => [
   gap: 12px;
   animation: pm-fade-up 0.4s ease both;
 }
-.opt-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px 20px; }
-.opt-row__left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.opt-row__label { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
-.opt-row__desc { font-size: 12px; color: var(--text-faint); }
+/* 分组面板与标题：与 TimingTab / AboutTab 完全一致 */
+.grp { padding: 16px 0 4px; }
+.grp__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0 18px 12px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 18px;
+}
+.row + .row { border-top: 1px solid var(--glass-border); }
+/* GSegmented 选项较宽，窄窗口时允许换行避免溢出 */
+.row--wrap { flex-wrap: wrap; }
+.row__text { min-width: 0; }
+.row__label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.row__desc { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; line-height: 1.45; }
 </style>

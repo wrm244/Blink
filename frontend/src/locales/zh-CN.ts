@@ -103,6 +103,9 @@ export default {
   },
   options: {
     title: "选项",
+    groupGeneral: "通用",
+    groupAutoPause: "自动暂停",
+    groupWindow: "窗口",
     longBreaks: "启用长休息",
     longBreaksDesc: "在短休息循环中偶尔插入更长的休息。",
     sound: "休息结束时播放铃声",
@@ -146,7 +149,7 @@ export default {
     prompt: "请按下组合键…",
     clear: "清除",
     conflict: "与“{action}”重复",
-    hint: "点击下方按钮，然后直接按下想使用的组合键。",
+    hint: "点击上方右侧按钮，然后直接按下想使用的组合键。",
   },
   break: {
     shortLabel: "眼睛休息",

@@ -85,6 +85,12 @@ function selectDay(d: number) {
 
 const monthLabel = computed(() => monthNames.value[month.value - 1])
 
+// 选中日日期文案：中文 "2026年9月5日"，英文 "Sep 5, 2026"
+const dateLabel = computed(() => {
+  if (weekStartsOnMonday.value) return `${year.value}年${monthLabel.value}${selectedDay.value}日`
+  return `${monthLabel.value} ${selectedDay.value}, ${year.value}`
+})
+
 // 监听引擎 tick：休息结束（阶段从 break 切回 focus）时自动刷新统计，
 // 避免用户手动点"今天"才看到更新。只在阶段实际变化时 reload，不每秒刷新。
 let lastPhase = ''
@@ -188,10 +194,8 @@ onUnmounted(() => offTick?.())
     <!-- 选中日详情 -->
     <GlassPanel class="detail">
       <div class="detail__head">
-        <span class="detail__title">
-          {{ t('stats.dayDetail') }}
-          <span v-if="selectedDay" class="detail__date">{{ year }} {{ monthLabel }} {{ selectedDay }}{{ t('stats.daySuffix') }}</span>
-        </span>
+        <span class="detail__title">{{ t('stats.dayDetail') }}</span>
+        <span v-if="selectedDay" class="detail__date tabular-nums">{{ dateLabel }}</span>
       </div>
       <div v-if="selectedStats" class="detail__grid">
         <div class="detail__row">
@@ -205,10 +209,12 @@ onUnmounted(() => offTick?.())
           <span class="detail__value tabular-nums">{{ fmtDuration(selectedStats.breakSec, durLocale) }}</span>
         </div>
         <div class="detail__row">
+          <Zap class="size-4 detail__icon" />
           <span class="detail__label">{{ t('stats.shortBreaks') }}</span>
           <span class="detail__value tabular-nums">{{ selectedStats.shortBreaks }} {{ t('stats.times') }}</span>
         </div>
         <div class="detail__row">
+          <Hourglass class="size-4 detail__icon" />
           <span class="detail__label">{{ t('stats.longBreaks') }}</span>
           <span class="detail__value tabular-nums">{{ selectedStats.longBreaks }} {{ t('stats.times') }}</span>
         </div>
@@ -288,14 +294,20 @@ onUnmounted(() => offTick?.())
 .cal__legend-box { width: 14px; height: 14px; border-radius: 4px; }
 
 /* ---- 选中日详情 ---- */
-.detail { padding: 16px 20px; }
-.detail__head { margin-bottom: 12px; }
-.detail__title { font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: baseline; gap: 8px; }
-.detail__date { font-size: 13px; font-weight: 400; color: var(--text-muted); }
-.detail__grid { display: flex; flex-direction: column; gap: 10px; }
-.detail__row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+.detail { padding: 16px 0 12px; }
+.detail__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 18px 8px; }
+.detail__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.detail__date { font-size: 12px; color: var(--text-muted); }
+.detail__grid { display: flex; flex-direction: column; gap: 8px; margin: 0 18px; }
+.detail__row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 9px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
 .detail__icon { color: var(--text-muted); }
 .detail__label { font-size: 13px; color: var(--text-muted); }
 .detail__value { font-size: 14px; font-weight: 500; color: var(--text); margin-left: auto; }
-.detail__empty { font-size: 13px; color: var(--text-faint); padding: 16px 10px; text-align: center; }
+.detail__empty { font-size: 13px; color: var(--text-faint); padding: 14px 18px; text-align: center; }
 </style>

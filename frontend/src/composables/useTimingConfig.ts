@@ -1,10 +1,10 @@
 // 计时设置字段与预设方案的组合式函数。
 // 定义各计时字段的元数据（标签、范围、预设值）和一键应用的预设方案。
 
-import { computed } from 'vue'
-import type { Reactive } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { Settings } from '@bindings/blink/internal/config/models'
+import type { Reactive } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export interface TimingField {
   key: keyof Settings
@@ -27,9 +27,9 @@ export interface PresetProfile {
   values?: Partial<Settings>
 }
 
-// 预设值列表
-const focusPresets = [15, 20, 25, 30, 45, 50]
-const shortBreakPresets = [20, 60, 180, 300, 600]
+// 预设值列表（52 与 1020s=17m 对应 52/17 预设）
+const focusPresets = [15, 20, 25, 30, 45, 50, 52]
+const shortBreakPresets = [20, 60, 180, 300, 600, 1020]
 const longBreakPresets = [5, 10, 15, 20]
 const intervalPresets = [2, 3, 4, 5]
 const preWarnPresets = [0, 10, 15, 30, 60]
