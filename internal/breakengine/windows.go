@@ -34,34 +34,53 @@ func (e *Engine) hideOverlays() { e.sendCmd(cmdHideOverlays) }
 func (e *Engine) showNotice()   { e.sendCmd(cmdShowNotice) }
 func (e *Engine) hideNotice()   { e.sendCmd(cmdHideNotice) }
 
-// windowLoop 拥有遮罩和通知窗口的控制权。它是唯一读写 e.overlays
-// 和 e.notice 的 goroutine，因此这些字段不需要互斥锁。
-func (e *Engine) windowLoop() {
+// windowState 是 windowLoop 独占的窗口句柄集合。
+//
+// 它必须是每代循环各自持有的一份局部状态，而不是 Engine 的字段：
+// Stop() 之后旧循环还要留下来排空退出命令（hide overlays，见 windowLoop），
+// 而 Start() 可能已经启动了新一代循环，两代会在一段时间内并存。
+// 若句柄挂在 Engine 上，两代就会同时读写同一组字段——这是数据竞争。
+// 各自持有一份后，"windowLoop 独占窗口句柄"的不变式在跨代时依然成立，
+// 因此这些字段不需要任何锁。
+type windowState struct {
+	overlays []application.Window
+	notice   application.Window
+}
+
+// windowLoop 拥有遮罩和通知窗口的控制权。它是唯一读写 ws.overlays
+// 和 ws.notice 的 goroutine，因此这些字段不需要互斥锁。
+//
+// stopCh / cmdCh 由 Start 传入并只对应本代循环：本循环必须只消费自己
+// 这一代的窗口命令。若读的是 e.cmdCh 字段，Stop→Start 换代后本循环会
+// 开始窃取新一代引擎的命令，新一代自己的 windowLoop 反而收不到——
+// 表现为遮罩该显示时不显示、该关闭时关不掉。
+func (e *Engine) windowLoop(stopCh chan struct{}, cmdCh chan windowCmd) {
+	var ws windowState
 	for {
 		select {
-		case <-e.stopCh:
+		case <-stopCh:
 			// 退出前排空 Stop 入队的命令（如 hide overlays），
 			// 否则上面的 select 可能先选中 stopCh，导致遮罩/通知窗口
 			// 残留在屏幕上。
 			for {
 				select {
-				case c := <-e.cmdCh:
-					e.execWindowCmd(c)
+				case c := <-cmdCh:
+					e.execWindowCmd(&ws, c)
 				default:
 					return
 				}
 			}
-		case c := <-e.cmdCh:
-			e.execWindowCmd(c)
+		case c := <-cmdCh:
+			e.execWindowCmd(&ws, c)
 		}
 	}
 }
 
 // execWindowCmd 执行单个窗口命令。
-func (e *Engine) execWindowCmd(c windowCmd) {
+func (e *Engine) execWindowCmd(ws *windowState, c windowCmd) {
 	switch c {
 	case cmdShowOverlays:
-		e.ensureOverlays()
+		e.ensureOverlays(ws)
 		// 先激活应用，再显示/聚焦窗口。Blink 是 Accessory（菜单栏）应用，
 		// 遮罩弹出时焦点仍在此前的前台应用上。macOS 只对活跃应用的窗口
 		// 投递 hover/点击事件，且 makeKeyWindow 在应用未激活时无效——
@@ -69,7 +88,7 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 		// Activate 内部是 dispatch_async 到主队列，与后续 Show/Focus
 		// 的 InvokeSync 按 FIFO 顺序执行，因此激活必然先生效。
 		platform.Activate()
-		for _, w := range e.overlays {
+		for _, w := range ws.overlays {
 			w.Show()
 			w.Focus()
 		}
@@ -77,16 +96,16 @@ func (e *Engine) execWindowCmd(c windowCmd) {
 		// 销毁遮罩窗口而非隐藏：隐藏会保持 WKWebView 存活，
 		// 其 WebKit 渲染进程仍驻留内存。下次休息时在 ensureOverlays
 		// 中重建的开销很小。
-		e.closeOverlays()
+		e.closeOverlays(ws)
 	case cmdShowNotice:
-		e.ensureNotice()
-		if e.notice != nil {
-			e.notice.Show()
+		e.ensureNotice(ws)
+		if ws.notice != nil {
+			ws.notice.Show()
 		}
 	case cmdHideNotice:
-		if e.notice != nil {
-			e.notice.Close()
-			e.notice = nil
+		if ws.notice != nil {
+			ws.notice.Close()
+			ws.notice = nil
 		}
 	}
 }
@@ -96,12 +115,12 @@ func overlayName(screenID string) string { return "pm-overlay-" + screenID }
 
 // overlaysMatch 报告缓存的遮罩窗口是否仍然对应当前连接的显示器
 // （数量和屏幕 ID 都相同）。
-func (e *Engine) overlaysMatch(screens []*application.Screen) bool {
-	if len(e.overlays) != len(screens) {
+func (e *Engine) overlaysMatch(ws *windowState, screens []*application.Screen) bool {
+	if len(ws.overlays) != len(screens) {
 		return false
 	}
-	have := make(map[string]bool, len(e.overlays))
-	for _, w := range e.overlays {
+	have := make(map[string]bool, len(ws.overlays))
+	for _, w := range ws.overlays {
 		have[w.Name()] = true
 	}
 	for _, s := range screens {
@@ -113,40 +132,40 @@ func (e *Engine) overlaysMatch(screens []*application.Screen) bool {
 }
 
 // closeOverlays 关闭并清空所有遮罩窗口。
-func (e *Engine) closeOverlays() {
-	for _, w := range e.overlays {
+func (e *Engine) closeOverlays(ws *windowState) {
+	for _, w := range ws.overlays {
 		w.Close()
 	}
-	e.overlays = nil
+	ws.overlays = nil
 }
 
 // ensureOverlays 为每个连接的显示器创建一个全屏半透明窗口
 // （多显示器设置下每个屏幕都会有遮罩），在显示器集合未变化时
 // 复用缓存的窗口。
-func (e *Engine) ensureOverlays() {
+func (e *Engine) ensureOverlays(ws *windowState) {
 	a := e.app_()
 	if a == nil {
 		return
 	}
 	screens := a.Screen.GetAll()
-	if e.overlaysMatch(screens) {
+	if e.overlaysMatch(ws, screens) {
 		return
 	}
-	e.closeOverlays()
+	e.closeOverlays(ws)
 	for _, sc := range screens {
 		screen := sc
-		e.overlays = append(e.overlays, a.Window.NewWithOptions(overlayOptions(screen)))
+		ws.overlays = append(ws.overlays, a.Window.NewWithOptions(overlayOptions(screen)))
 	}
 }
 
 // ensureNotice 懒创建唯一的休息前提醒窗口，放置在主显示器顶部居中。
-func (e *Engine) ensureNotice() {
-	if e.notice != nil {
+func (e *Engine) ensureNotice(ws *windowState) {
+	if ws.notice != nil {
 		return
 	}
 	a := e.app_()
 	if a == nil {
 		return
 	}
-	e.notice = a.Window.NewWithOptions(noticeOptions(a))
+	ws.notice = a.Window.NewWithOptions(noticeOptions(a))
 }

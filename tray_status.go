@@ -10,33 +10,38 @@ import (
 	"blink/internal/breakengine"
 )
 
-// trayStatusLoop 监听引擎的 blink:tick 事件，在状态文本变化时更新
+// initTrayStatus 订阅引擎的 blink:tick 事件，在状态文本变化时更新
 // 状态项标签、托盘标签和工具提示。
 //
 // 用事件驱动取代每秒轮询 GetState()：引擎每次 tick / 阶段切换都会 emit，
 // 因此倒计时变化天然逐秒驱动这里；而暂停、空闲等状态不变时不更新，
 // 避免了轮询带来的不必要锁竞争与无变化时的重复 UI 调用。
-func trayStatusLoop() {
+//
+// 必须在 goroutine 上执行：末尾的 updateTrayState 会调用 tray.SetLabel /
+// SetTooltip，它们内部 InvokeSync 回主线程，从主线程调用会自锁。
+//
+// 注册完监听后本 goroutine 即可退出，不需要用 select{} 之类的手段把自己
+// 挂住——app.Event.On 登记的监听器由 app 持有，回调运行在 app 自己的
+// 分发 goroutine 上，与本 goroutine 是否存活无关。以前那个永久阻塞的
+// select{} 白白占住一个 goroutine 的栈，还让"这个 goroutine 还在跑"
+// 看起来像是订阅有效的必要条件。
+func initTrayStatus() {
 	if app == nil {
 		return
 	}
 	// 事件监听回调跑在独立 goroutine（见 Wails 的 dispatchEventToListeners），
 	// 可安全地执行主线程 UI 更新以外的逻辑；SystemTray 的 SetLabel 内部会
 	// 调度到主线程，此处非主线程调用正是安全的。
-	off := app.Event.On("blink:tick", func(ev *application.CustomEvent) {
+	// off 用于取消监听；托盘订阅与进程同生命周期，无需调用。
+	_ = app.Event.On("blink:tick", func(ev *application.CustomEvent) {
 		st, ok := ev.Data.(breakengine.State)
 		if !ok {
 			return
 		}
 		updateTrayState(st)
 	})
-	// off 用于取消监听；本 goroutine 生命周期与进程一致，无需调用。
-	_ = off
 	// 启动时先以当前状态渲染一次，避免托盘一直显示默认 "Blink"。
 	updateTrayState(engine.GetState())
-	// 阻塞直到退出：事件回调在独立的 goroutine 中执行，不在这里同步等待，
-	// 因此用一个空 channel 挂住本 goroutine 以保持监听存活。
-	select {}
 }
 
 var (

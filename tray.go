@@ -112,7 +112,12 @@ func buildTray() {
 	menuItemPreferences.OnClick(func(*application.Context) { go showPreferences() })
 	menu.AddSeparator()
 	menuItemQuit = menu.Add(tr("quit"))
-	menuItemQuit.OnClick(func(*application.Context) { app.Quit() })
+	// 走 quitApp（而非直接 app.Quit）：它会先 engine.Stop()。Stop 会
+	// 入队隐藏命令，让 windowLoop 在退出前撤掉可能正挡在屏幕上的休息
+	// 遮罩与提前提醒窗口。另外 app.Quit 内部 InvokeSync 回主线程，
+	// 而菜单回调本身就跑在主线程，必须在 goroutine 上调用（与
+	// showPreferences、ResolveClose 同理）。
+	menuItemQuit.OnClick(func(*application.Context) { go quitApp() })
 
 	tray = app.SystemTray.New()
 	tray.SetLabel("Blink")

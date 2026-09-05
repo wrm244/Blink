@@ -86,7 +86,9 @@ func main() {
 	registerAll(settings)
 
 	// 保持菜单栏状态和菜单标签与引擎同步。
-	go trayStatusLoop()
+	// 必须在 goroutine 上跑：initTrayStatus 末尾要更新托盘标签，
+	// 那会 InvokeSync 回主线程。
+	go initTrayStatus()
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

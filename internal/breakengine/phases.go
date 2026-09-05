@@ -38,14 +38,19 @@ func (e *Engine) shouldLong() bool {
 
 // setPhase 设置当前阶段、总时长和结束时间，并清除暂停状态。
 func (e *Engine) setPhase(p Phase, dur time.Duration) {
+	// 只采样一次时钟：阶段开始与阶段结束是同一起点加一个偏移，
+	// 不是两个独立的时间点。分两次 time.Now() 会让
+	// phaseEnd-phaseStart 差出中间那几个微秒，而 recordFocus /
+	// recordBreak 正是用 time.Since(phaseStart) 计算实际时长的，
+	// 偏差会直接渗进统计。
+	now := time.Now()
 	e.phase = p
 	e.total = dur
-	e.phaseEnd = time.Now().Add(dur)
+	e.phaseStart = now
+	e.phaseEnd = now.Add(dur)
 	e.paused = false
 	e.autoPaused = false
 	e.pausedRemaining = 0
-	// 记录阶段开始时刻，供阶段结束时计算实际持续时长。
-	e.phaseStart = time.Now()
 	// 新阶段开始，清零暂停累计（上一阶段的暂停不影响本阶段统计）。
 	e.pausedAccum = 0
 }
@@ -216,12 +221,14 @@ func (e *Engine) advancePhase(now time.Time) {
 	remaining := e.phaseEnd.Sub(now)
 	switch e.phase {
 	case PhaseFocusing:
-		// 当剩余时间 <= 预提醒时长时切换到预提醒阶段；
-		// 剩余时间 <= 0 时直接开始休息。
-		if e.preDur() > 0 && remaining <= e.preDur() {
-			e.startPreBreak()
-		} else if remaining <= 0 {
+		// 先判到期，再判预告窗口。顺序不能反：remaining<=0 时
+		// "remaining <= preDur()" 同样成立，把预告判断放前面会吞掉
+		// 到期分支——于是专注已经归零时引擎不去休息，反而插入一个
+		// 完整的预告阶段，把休息又往后推了 preDur 秒。
+		if remaining <= 0 {
 			e.startBreak()
+		} else if e.preDur() > 0 && remaining <= e.preDur() {
+			e.startPreBreak()
 		} else {
 			e.emit()
 		}

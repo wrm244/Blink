@@ -63,3 +63,13 @@ tasks:
     summary: Builds and runs the Docker image
     cmds:
       - task: common:run:docker
+
+  test:
+    summary: Runs the Go test suite (engine + stats store) with race detection
+    cmds:
+      - go test ./internal/... -race -count=1
+
+  test:quick:
+    summary: Runs the Go test suite without race detection (faster local loop)
+    cmds:
+      - go test ./internal/... -count=1

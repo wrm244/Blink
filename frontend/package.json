@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@lucide/vue": "^1.31.0",
+    "@lucide/vue": "^1.40.0",
     "@tailwindcss/vite": "4.3.3",
     "@wailsio/runtime": "latest",
     "clsx": "2.1.1",

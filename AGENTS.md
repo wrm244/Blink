@@ -17,7 +17,7 @@ wails3 task darwin:dmg                  # distributable DMG
 ```
 
 - Frontend validation is type-check only: `vue-tsc` (no test/lint scripts in package.json).
-- **There are no Go tests currently** — never claim or rely on test coverage.
+- Go unit tests exist for the engine and stats store under `internal/` (`go test ./internal/...`, or `wails3 task test`); CI runs them with `-race` to catch concurrent-engine regressions. Don't claim coverage is exhaustive, but the Go suite must stay green.
 - The project-level `Taskfile.yml` delegates to per-platform Taskfiles under `build/`.
 
 ## Architecture boundaries

@@ -70,9 +70,23 @@ type Engine struct {
 	// 计算实际持续时长并累加到统计。setPhase 每次切换都会刷新它。
 	phaseStart time.Time
 
-	app      *application.App
-	overlays []application.Window
-	notice   application.Window
+	// app 是 Wails 应用实例，在 Start 时取得；遮罩/通知窗口的句柄
+	// 不放在这里——它们由 windowLoop 独占（见 windows.go 的 windowState）。
+	app *application.App
+
+	// audioProbe 是会议/媒体检测的探针实现。以字段而非直接调用
+	// platform.AudioActivity 的形式存在，是为了让单测能替换掉真正的
+	// CGo 探针（那会去遍历系统音频进程），从而断言"什么时候该查、
+	// 什么时候不该查"而无需触碰系统状态。
+	audioProbe func() (meeting, media bool)
+
+	// lastEmitted 是上一次真正投递出去的状态快照，emit 据此跳过
+	// 内容完全相同的重复事件。
+	lastEmitted State
+	// emitCount 累计真正投递的 tick 事件次数。emit 的去重逻辑必须
+	// 可观测，否则"少发事件"和"发错事件"在测试里长得一样；
+	// 生产代码不读取它。
+	emitCount int
 
 	stopCh  chan struct{}
 	cmdCh   chan windowCmd
@@ -81,7 +95,7 @@ type Engine struct {
 
 // New 根据给定设置创建引擎。
 func New(s config.Settings) *Engine {
-	return &Engine{settings: s}
+	return &Engine{settings: s, audioProbe: platform.AudioActivity}
 }
 
 // SetStatsStore 注入统计存储。必须在 Start 之前调用。
@@ -101,19 +115,30 @@ func (e *Engine) Start() {
 		return
 	}
 	e.started = true
-	e.stopCh = make(chan struct{})
-	e.cmdCh = make(chan windowCmd, 8)
+	// stopCh / cmdCh 属于"这一代"后台循环。必须以参数形式交给下面
+	// 启动的 goroutine，而不是让它们回头去读 e.stopCh / e.cmdCh 字段：
+	// Stop() 关闭的只是当前这一代的 channel，而 Start() 会立刻换上新的。
+	// 若 goroutine 读的是字段，那么 Stop→Start 之后回到 select 的旧循环
+	// 读到的会是新一代（未关闭）的 channel，于是永远等下去——同一个引擎
+	// 从此有两套循环在驱动状态机（tick 翻倍、探测翻倍、emit 翻倍），
+	// 且因为"停止后再开始"通常是最后一次 Start，僵尸循环会活到进程退出。
+	stopCh := make(chan struct{})
+	cmdCh := make(chan windowCmd, 8)
+	e.stopCh = stopCh
+	e.cmdCh = cmdCh
 	e.app = application.Get()
 	now := time.Now()
 	e.lastTick = now
+	// 清零去重缓存：引擎重启后的第一次 emit 必须真正投递出去，
+	// 否则若新状态恰好等于停止前那次快照，前端就收不到这次重启。
+	e.lastEmitted = State{}
 	e.resetExternalState()
 	e.startFocus()
 	e.mu.Unlock()
 
-	go e.loop()
-	go e.idleLoop()
-	go e.externalSuspendLoop()
-	go e.windowLoop()
+	go e.loop(stopCh)
+	go e.idleLoop(stopCh)
+	go e.windowLoop(stopCh, cmdCh)
 }
 
 // IsStarted 报告引擎的后台 ticker 是否正在运行。
@@ -175,39 +200,71 @@ func (e *Engine) state() State {
 }
 
 // emit 向前端发送 tick 事件。调用者需持有互斥锁。
+//
+// 内容与上次完全相同时跳过投递。暂停、空闲这类冻结状态下每秒算出的
+// 快照一模一样，逐秒投递只是让 Go 侧多做一次 JSON 序列化、让事件总线
+// 多广播一轮、让每个 webview 多赋一组相同的值。所有下游都不依赖这些
+// 重复事件：托盘自带变更检测，提醒窗口走本地时钟，遮罩与设置页把值
+// 直接交给 Vue 的响应式系统（值未变即不重渲染）。
 func (e *Engine) emit() {
+	st := e.state()
+	if st == e.lastEmitted {
+		return
+	}
+	e.lastEmitted = st
+	e.emitCount++
 	a := e.app_()
 	if a == nil {
 		return
 	}
-	a.Event.Emit(eventTick, e.state())
+	a.Event.Emit(eventTick, st)
 }
 
-// loop 是每秒驱动一次的主循环。
-func (e *Engine) loop() {
+// loop 是每秒驱动一次的主循环，同时承担会议/媒体检测。
+// stopCh 由 Start 传入并只对应本代循环，详见 Start 中的说明。
+//
+// 外部检测原本由独立的 externalSuspendLoop（同为 1 秒周期）承担，
+// 合并进来有三个好处：少一个后台 goroutine；每秒只获取一次引擎锁
+// （原本两个循环各抢一次，且相位随机）；以及确定执行次序——先检测
+// 再推进，本轮检测出的自动暂停能立刻被这次 tick 看到，而不必等到
+// 另一个 goroutine 的下一次唤醒。
+func (e *Engine) loop(stopCh chan struct{}) {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-e.stopCh:
+		case <-stopCh:
 			return
 		case now := <-ticker.C:
-			e.mu.Lock()
-			e.tick(now)
-			e.mu.Unlock()
+			e.tickOnce(now)
 		}
 	}
+}
+
+// tickOnce 执行一个完整周期：会议/媒体检测 → 状态机推进（tick 内部会
+// 投递事件）。
+//
+// 单独抽成方法而不是内联在 loop 里，是为了让"探测期间不得持有引擎锁"
+// 这类并发契约能被测试直接验证——否则测试只能去驱动真实的 ticker。
+func (e *Engine) tickOnce(now time.Time) {
+	// 探测在锁外完成（CGo 调用约 2ms，见 probeExternal 的说明），
+	// 只把结果的应用与状态机推进留在临界区内。
+	meeting, media, probed := e.probeExternal()
+	e.mu.Lock()
+	e.applyExternalResult(meeting, media, probed)
+	e.tick(now)
+	e.mu.Unlock()
 }
 
 // idleLoop 定期采样系统空闲时间，当用户不活动超过阈值时
 // 标记引擎为空闲状态（保持/重置专注计时器）。活动恢复时
 // 清除标记并开始新的专注周期。
-func (e *Engine) idleLoop() {
+func (e *Engine) idleLoop(stopCh chan struct{}) {
 	ticker := time.NewTicker(idleCheckInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-e.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			idle := time.Duration(platform.IdleSeconds()) * time.Second

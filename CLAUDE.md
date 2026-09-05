@@ -19,7 +19,7 @@ wails3 task darwin:dmg                # distributable DMG
 - Node package manager is **pnpm** (lockfile: `pnpm-lock.yaml`).
 - The project-level `Taskfile.yml` delegates to per-platform Taskfiles under `build/`.
 - Vite dev server port: `9245` (set via `WAILS_VITE_PORT` env).
-- There are **no Go tests** currently; frontend uses `vue-tsc` for type-checking only.
+- Go unit tests cover the core engine (`internal/breakengine`) and stats store (`internal/stats`): run `go test ./internal/...` (the `test` Taskfile task adds `-race`). Frontend uses `vue-tsc` for type-checking only. CI must run the Go suite with `-race` — concurrent-engine bugs are only caught there.
 
 ## Architecture
 
