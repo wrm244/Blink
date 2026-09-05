@@ -41,11 +41,13 @@ const emit = defineEmits<{
       </div>
     </GlassPanel>
 
-    <!-- 计时字段网格 -->
-    <GlassPanel class="timing-grid">
+    <!-- 计时参数列表（分组列表 + 行内下拉选择） -->
+    <GlassPanel class="timing-list">
+      <div class="timing-list__title">{{ $t('timing.parameters') }}</div>
       <GTimeField
         v-for="f in timingFields"
         :key="f.key"
+        class="timing-list__row"
         :label="f.label"
         :desc="f.desc"
         :unit="f.unit"
@@ -116,14 +118,23 @@ const emit = defineEmits<{
   color: var(--on-accent);
 }
 
-.timing-grid {
-  padding: 14px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.timing-list {
+  padding: 16px 0 4px;
+}
+/* 与 .presets 的标题对齐：面板水平 padding 18px，标题下方间距 12px */
+.timing-list__title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0 18px 12px;
+}
+/* 行间细分隔线（子组件根节点带父级 scoped 属性，可直接选中） */
+.timing-list__row + .timing-list__row {
+  border-top: 1px solid var(--glass-border);
 }
 @media (max-width: 720px) {
-  .timing-grid { grid-template-columns: 1fr; }
   .presets__grid { grid-template-columns: 1fr 1fr; }
 }
 </style>

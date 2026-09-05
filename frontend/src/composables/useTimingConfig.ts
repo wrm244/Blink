@@ -55,6 +55,15 @@ function fmtSecsChip(v: number): string {
 export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
   const { t } = useI18n()
 
+  /** 整数 + 单位（分 / 次）的完整显示串 */
+  const fmtUnit = (unit: string) => (v: number) => `${v} ${unit}`
+  const fmtMinutes = fmtUnit(t('timing.minutes'))
+  const fmtBreaks = fmtUnit(t('timing.breaks'))
+  /** 休息前提醒的 chip：0 显示"关闭" */
+  const chipWarn = (v: number) => (v === 0 ? t('timing.off') : fmtSecsChip(v))
+  /** 休息前提醒的完整显示：0 显示"关闭" */
+  const fmtWarn = (v: number) => (v === 0 ? t('timing.off') : fmtSecs(v))
+
   // 计时字段定义
   const timingFields = computed<TimingField[]>(() => [
     {
@@ -64,12 +73,13 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       unit: t('timing.minutes'),
       min: 5, max: 60, step: 1,
       presets: focusPresets,
+      formatValue: fmtMinutes,
     },
     {
       key: 'shortBreakDurationSec',
       label: t('timing.shortBreak'),
       desc: t('timing.shortDesc'),
-      min: 5, max: 600, step: 5,
+      min: 5, max: 1200, step: 5,
       presets: shortBreakPresets,
       formatChip: fmtSecsChip,
       formatValue: fmtSecs,
@@ -81,6 +91,7 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       unit: t('timing.minutes'),
       min: 1, max: 20, step: 1,
       presets: longBreakPresets,
+      formatValue: fmtMinutes,
     },
     {
       key: 'longBreakInterval',
@@ -89,6 +100,7 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       unit: t('timing.breaks'),
       min: 1, max: 10, step: 1,
       presets: intervalPresets,
+      formatValue: fmtBreaks,
     },
     {
       key: 'preBreakWarningSec',
@@ -96,8 +108,8 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       desc: t('timing.preDesc'),
       min: 0, max: 60, step: 5,
       presets: preWarnPresets,
-      formatChip: fmtSecsChip,
-      formatValue: fmtSecs,
+      formatChip: chipWarn,
+      formatValue: fmtWarn,
     },
     {
       key: 'idleThresholdMin',
@@ -106,6 +118,7 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       unit: t('timing.minutes'),
       min: 1, max: 30, step: 1,
       presets: idlePresets,
+      formatValue: fmtMinutes,
     },
   ])
 
@@ -127,7 +140,8 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       id: '52',
       name: t('timing.preset52'),
       desc: t('timing.preset52Desc'),
-      values: { focusDurationMin: 50, shortBreakDurationSec: 600, longBreakDurationMin: 20, longBreakInterval: 3, preBreakWarningSec: 60, idleThresholdMin: 10 },
+      // 52/17 节奏：52 分钟专注 + 17 分钟（1020 秒）短休息
+      values: { focusDurationMin: 52, shortBreakDurationSec: 1020, longBreakDurationMin: 20, longBreakInterval: 3, preBreakWarningSec: 60, idleThresholdMin: 10 },
     },
     { id: 'custom', name: t('timing.presetCustom'), desc: '' },
   ])

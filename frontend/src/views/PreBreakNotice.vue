@@ -1,12 +1,17 @@
 <script setup lang="ts">
-// 休息前提醒 - 主显示器顶部滑入的纤细提示（窗口透明，见 windows.go noticeOptions）。
-// 视觉上复用设置页的 Slate 玻璃设计系统：glass-strong 面板 + phase-prebreak 强调色 +
-// 与 hero 同源的大号细体数字 + GButton，消除与设置页的割裂感。
+// 休息前提醒 - 主显示器顶部滑入的提示卡片（窗口透明，见 window_options.go noticeOptions）
+// 视觉上完全对齐设置页 hero 卡片的三段结构（top → progress → bar）：
+//   hero__top    图标 + 标题 | 大号细体时钟      →  top    图标芯片 + 标题 | 倒计时
+//   hero__progress 通栏进度条（phase 色填充）    →  progress 同款 3px 进度条
+//   hero__bar    状态点文案 | GButton 操作       →  bar    脉冲点 + 副标题 | 推迟按钮
+// 样式值（字号/字重/颜色/圆角）直接取自 hero，两个窗口读起来是同一家族。
+//
 // 倒计时由本地按秒计时器驱动（对齐到秒边界），后端 tick 仅用于容差校正，
 // 保证稳定地每秒递减，而不是跟随后端 emit 的抖动偶发跳 2 秒。
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
+import { Eye } from '@lucide/vue'
 import { BreakService } from '@bindings/blink'
 import type { State } from '@bindings/blink/internal/breakengine/models'
 import GButton from '@/components/GButton.vue'
@@ -90,33 +95,32 @@ function postpone() { BreakService.PostponeBreak() }
 <template>
   <div class="notice-wrap">
     <div class="notice glass-strong">
-      <!-- 强调条：4px 竖条，使用休息前阶段色，与设置页 cycle__dot / phaseColor 同源。 -->
-      <div class="accent" aria-hidden="true" />
-
-      <div class="content">
-        <div class="row">
-          <!-- 倒计时簇：大号细数字 + 安静单位，与设置页 hero 时钟同源排版。 -->
-          <div class="count tabular-nums">
-            <span class="num">{{ remaining }}</span>
-            <span class="unit">{{ t('notice.secondsShort') }}</span>
+      <!-- 顶部行：图标芯片 + 标题（左），倒计时时钟（右）——与 hero__top 同构 -->
+      <div class="top">
+        <div class="brand">
+          <div class="icon" aria-hidden="true">
+            <Eye class="size-4" />
           </div>
-
-          <!-- 文案：标题 + 副标题，字号/颜色与设置页面板一致。 -->
-          <div class="body">
-            <div class="title">{{ t('notice.title') }}</div>
-            <div class="sub">{{ t('notice.sub') }}</div>
-          </div>
-
-          <!-- 推迟：幽灵式按钮，复用设置页 GButton(ghost) 组件。 -->
-          <GButton variant="ghost" size="sm" class="postpone" @click="postpone">
-            {{ t('notice.postpone') }}
-          </GButton>
+          <div class="title">{{ t('notice.title') }}</div>
         </div>
-
-        <!-- 进度条：与设置页 hero__progress 同源，随时间平滑填充（1s linear）。 -->
-        <div class="progress" aria-hidden="true">
-          <div class="progress__fill" :style="{ transform: `scaleX(${progress})` }" />
+        <div class="clock">
+          <span class="num tabular-nums">{{ remaining }}</span>
+          <span class="unit">{{ t('notice.secondsShort') }}</span>
         </div>
+      </div>
+
+      <!-- 进度条：与 hero__progress 同构，phase-prebreak 填充，1s linear 平滑推进 -->
+      <div class="progress" aria-hidden="true">
+        <div class="progress__fill" :style="{ transform: `scaleX(${progress})` }" />
+      </div>
+
+      <!-- 底部行：脉冲状态点 + 副标题（左），推迟按钮（右）——与 hero__bar 同构 -->
+      <div class="bar">
+        <span class="dot" aria-hidden="true" />
+        <span class="sub">{{ t('notice.sub') }}</span>
+        <GButton variant="glass" size="sm" class="postpone" @click="postpone">
+          {{ t('notice.postpone') }}
+        </GButton>
       </div>
     </div>
   </div>
@@ -131,91 +135,80 @@ function postpone() { BreakService.PostponeBreak() }
 }
 
 /* 卡片本体交给 .glass-strong 提供表面（半透明填充 + 发丝边框 + 顶部高光），
-   这里只负责布局与圆角，不覆盖其背景/边框。 */
+   这里只负责布局与圆角（16px = rounded-2xl，与设置页面板一致），不覆盖其背景/边框。 */
 .notice {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   width: 100%;
   height: 100%;
-  border-radius: 16px; /* rounded-2xl，与设置页面板一致 */
-  overflow: hidden;
+  border-radius: 16px;
+  padding: 12px 16px 10px;
+  box-sizing: border-box;
+  gap: 9px;
   color: var(--text);
   user-select: none;
   animation: pm-fade-up 0.35s ease both;
 }
 
-/* 强调条：4px 竖条紧贴左边缘，phase-prebreak 色。 */
-.accent {
-  width: 4px;
-  flex-shrink: 0;
-  background: var(--phase-prebreak);
-}
-
-.content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 14px;
-  box-sizing: border-box;
-}
-
-.row {
+/* ---- 顶部行：与 hero__top 同构 ---- */
+.top {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 12px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+/* 图标芯片：28px 圆角方块（mini 版 hero logo 位），phase-prebreak 着色 */
+.icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  border: 1px solid var(--glass-border);
+  color: var(--phase-prebreak);
+}
+.title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 倒计时簇：数字与设置页 hero 时钟同族（细字重 + tabular-nums），
-   让两个屏幕读起来相关。 */
-.count {
+/* 倒计时时钟：与 hero__time 同款排版（细字重 + tabular-nums），颜色用中性
+   --text（phase 色只出现在图标/进度条/状态点上，与 hero 的用法一致）。 */
+.clock {
   display: flex;
   align-items: baseline;
   gap: 3px;
   flex-shrink: 0;
-  color: var(--phase-prebreak);
 }
 .num {
-  font-size: 34px;
-  font-weight: 300;
+  font-size: 26px;
+  font-weight: 250;
   line-height: 1;
-  font-variant-numeric: tabular-nums;
+  color: var(--text);
   letter-spacing: -0.02em;
 }
 .unit {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-faint);
 }
 
-.body {
-  flex: 1;
-  min-width: 0;
-}
-.title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.005em;
-}
-.sub {
-  font-size: 11px;
-  color: var(--text-faint);
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.postpone {
-  flex-shrink: 0;
-}
-
-/* 进度条：与设置页 hero__progress 同源，2px 细线，phase-prebreak 填充。 */
+/* ---- 进度条：与 hero__progress 同构（3px 细线 + scaleX 推进） ---- */
 .progress {
-  height: 2px;
+  height: 3px;
   border-radius: 9999px;
   background: var(--track);
   overflow: hidden;
@@ -228,5 +221,33 @@ function postpone() { BreakService.PostponeBreak() }
   transform-origin: left center;
   transition: transform 1s linear;
   will-change: transform;
+}
+
+/* ---- 底部行：与 hero__bar 同构 ---- */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+/* 脉冲状态点：与保存栏 dirty 圆点同款 pm-pulse 动画，传递"正在进行"的紧迫感 */
+.dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--phase-prebreak);
+  animation: pm-pulse 2.4s ease-in-out infinite;
+}
+.sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.postpone {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 </style>

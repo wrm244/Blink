@@ -55,7 +55,7 @@ func overlayOptions(s *application.Screen) application.WebviewWindowOptions {
 func noticeOptions(a *application.App) application.WebviewWindowOptions {
 	const (
 		noticeWidth  = 380
-		noticeHeight = 108
+		noticeHeight = 122
 	)
 	x, y := 0, 80
 	if primary := a.Screen.GetPrimary(); primary != nil {

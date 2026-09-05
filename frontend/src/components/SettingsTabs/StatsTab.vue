@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // StatsTab - 统计标签页：日历热力图 + 当月汇总 + 选中日详情列表。
 import GlassPanel from '@/components/GlassPanel.vue'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee, Activity, CalendarCheck } from '@lucide/vue'
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
@@ -128,11 +128,11 @@ onUnmounted(() => offTick?.())
         </div>
         <div class="summary__cell">
           <div class="summary__value tabular-nums">{{ monthSummary.shortBreaks + monthSummary.longBreaks }}</div>
-          <div class="summary__label">{{ t('stats.breakCount') }}</div>
+          <div class="summary__label"><Activity class="size-3" />{{ t('stats.breakCount') }}</div>
         </div>
         <div class="summary__cell">
           <div class="summary__value tabular-nums">{{ monthSummary.activeDays }}</div>
-          <div class="summary__label">{{ t('stats.activeDays') }}</div>
+          <div class="summary__label"><CalendarCheck class="size-3" />{{ t('stats.activeDays') }}</div>
         </div>
       </div>
     </GlassPanel>
