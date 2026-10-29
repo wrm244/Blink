@@ -9,6 +9,7 @@ package stats
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -36,18 +37,38 @@ type DayStats struct {
 // dirty，由后台 flushLoop 每 30 秒同步一次到磁盘，并在 Close 时
 // 强制落盘，避免每次阶段切换都同步写磁盘。
 type Store struct {
-	mu    sync.Mutex
-	data  map[string]DayStats // key = "2006-01-02"（本地日期）
-	path  string
-	dirty bool
+	mu     sync.Mutex
+	data   map[string]DayStats // key = "2006-01-02"（本地日期）
+	path   string
+	dirty  bool
 	stopCh chan struct{}
+
+	// lifecycleMu 串行化 Start/Close。二者可能被不同 goroutine 调用，
+	// 仅靠 stopCh 的 select 检查存在并发关闭同一 channel 的竞态。
+	lifecycleMu sync.Mutex
+	started     bool
+	closed      bool
+
+	// writeMu 串行化落盘，使"取快照"与"写文件"可以分开：mu 只保护内存
+	// 数据，磁盘 IO 在锁外进行。与 mu 的获取顺序固定为 writeMu → mu，
+	// 不会死锁。
+	writeMu sync.Mutex
+
+	// writeFile 是落盘实现，默认 atomicfile.WriteFile。只在 New 里赋值、
+	// 启动前由测试注入，因此无需加锁保护。
+	writeFile func(path string, data []byte, perm os.FileMode) error
 }
 
 // New 创建一个 Store。path 为空时退化为纯内存模式（不落盘），
 // 便于测试。Load 会在 path 存在时读取已有数据。
 // 创建后用 Start() 启动后台落盘 goroutine，用 Close() 停止并强制落盘。
 func New(path string) *Store {
-	s := &Store{data: make(map[string]DayStats), path: path, stopCh: make(chan struct{})}
+	s := &Store{
+		data:      make(map[string]DayStats),
+		path:      path,
+		stopCh:    make(chan struct{}),
+		writeFile: atomicfile.WriteFile,
+	}
 	if path != "" {
 		s.load()
 	}
@@ -60,17 +81,24 @@ func (s *Store) Start() {
 	if s.path == "" {
 		return
 	}
+	s.lifecycleMu.Lock()
+	if s.started || s.closed {
+		s.lifecycleMu.Unlock()
+		return
+	}
+	s.started = true
+	s.lifecycleMu.Unlock()
 	go s.flushLoop()
 }
 
 // Close 停止后台 goroutine 并强制落盘。应在前端关闭前调用。
 func (s *Store) Close() {
-	select {
-	case <-s.stopCh:
-		// 已关闭
-	default:
+	s.lifecycleMu.Lock()
+	if !s.closed {
+		s.closed = true
 		close(s.stopCh)
 	}
+	s.lifecycleMu.Unlock()
 	s.flush()
 }
 
@@ -100,43 +128,99 @@ func (s *Store) load() {
 	if err != nil {
 		return
 	}
+	// 先解码到临时 map，再一次性替换内存状态。这样坏 JSON 不会留下
+	// 半解析的数据，且合法的 JSON null 不会把 s.data 置为 nil 后在
+	// AddFocus/AddBreak 写入时 panic。
+	var loaded map[string]DayStats
+	if err := json.Unmarshal(data, &loaded); err != nil || loaded == nil {
+		return
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	_ = json.Unmarshal(data, &s.data)
+	s.data = loaded
+	s.mu.Unlock()
 }
 
 // flush 将内存数据序列化并写入磁盘。仅当有未落盘的修改（dirty）时执行。
 // 内部自取锁，可从任意 goroutine 调用。
 //
-// 序列化与写盘都在锁内完成：若在锁外写盘，两个并发 flush（定时 flush 与
-// 退出时 Close 的 flush 相遇）时，后完成的写盘会用旧快照覆盖新数据，
-// 且 dirty 已被清除，内存中的新数据从此不再落盘——重启后丢失统计。
-// 锁内写盘保证 dirty 与磁盘状态一致。数据量小（每日几条），毫秒级 IO。
+// 锁的粒度是这里的关键：
+//   - writeMu 保证同一时刻只有一个 flush 在写盘。没有它，定时 flush 与
+//     退出时 Close 的 flush 相遇时，后完成的写盘会用旧快照覆盖新数据，
+//     而 dirty 已被清除，新数据从此不再落盘——重启后丢失统计。
+//   - mu 只用来"取快照 + 清 dirty"，不做序列化和磁盘 IO。AddFocus/AddBreak
+//     由引擎在阶段切换时调用，一旦与这里的磁盘 IO 抢同一把锁，引擎的 tick
+//     就会被 fsync 阻塞；信号量竞争激烈时这正是"每次休息后托盘卡一下"的成因。
+//
+// 写盘失败时把 dirty 置回，让下一轮重试，而不是静默丢掉这批数据。
 func (s *Store) flush() {
 	if s.path == "" {
 		return
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.dirty {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	snapshot, ok := s.takeSnapshot()
+	if !ok {
 		return
 	}
-	data, err := json.MarshalIndent(s.data, "", "  ")
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
+		s.markDirty()
 		return
 	}
 	// 原子写入：写入中途崩溃不会留下截断损坏的统计文件
 	//（那会丢掉全部历史记录，load 只能静默忽略坏文件）。
-	if err := atomicfile.WriteFile(s.path, data, 0o644); err != nil {
-		return
+	if err := s.writeFile(s.path, data, 0o644); err != nil {
+		// 回置 dirty 让下一轮 flush 重试（数据仍在内存里，不必惊动用户），
+		// 但要留一条日志：连续失败通常意味着磁盘满或权限问题，
+		// 静默重试会让"统计一直是空的"变得无从排查。
+		s.markDirty()
+		log.Printf("blink/stats: 统计落盘失败，将在下一轮重试: %v", err)
+	}
+}
+
+// takeSnapshot 在锁内复制一份数据副本并清除 dirty，供锁外写盘使用。
+// 返回 false 表示没有待落盘的修改。
+func (s *Store) takeSnapshot() (map[string]DayStats, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.dirty {
+		return nil, false
+	}
+	snapshot := make(map[string]DayStats, len(s.data))
+	for k, v := range s.data {
+		snapshot[k] = v
 	}
 	s.dirty = false
+	return snapshot, true
+}
+
+// markDirty 在写盘失败后重新标记，保证这批数据会在下一轮 flush 重试。
+func (s *Store) markDirty() {
+	s.mu.Lock()
+	s.dirty = true
+	s.mu.Unlock()
 }
 
 // AddFocus 向指定日期累加专注秒数。日期取自 t 的本地日期。
 // 只标记 dirty，由后台 flushLoop 定时落盘。
+// closedNow 报告 Store 是否已经 Close。取生命周期锁而不是数据锁：
+// 与 Start/Close 用同一把锁串行化，避免"以为还开着、其实已 flush 完"。
+func (s *Store) closedNow() bool {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.closed
+}
+
 func (s *Store) AddFocus(t time.Time, sec int) {
 	if sec <= 0 {
+		return
+	}
+	// 关闭之后（退出流程中在途的引擎 tick）再写入没有意义：flushLoop 已退出，
+	// 没人会把这份数据落盘。直接丢弃并留痕，好过静默留下一个永远不会保存的
+	// dirty 标记。
+	if s.closedNow() {
+		log.Printf("blink/stats: Store 已关闭，丢弃 %d 秒记录", sec)
 		return
 	}
 	key := t.Format(dateKeyLayout)
@@ -152,6 +236,13 @@ func (s *Store) AddFocus(t time.Time, sec int) {
 // 只标记 dirty，由后台 flushLoop 定时落盘。
 func (s *Store) AddBreak(t time.Time, sec int, isLong bool) {
 	if sec <= 0 {
+		return
+	}
+	// 关闭之后（退出流程中在途的引擎 tick）再写入没有意义：flushLoop 已退出，
+	// 没人会把这份数据落盘。直接丢弃并留痕，好过静默留下一个永远不会保存的
+	// dirty 标记。
+	if s.closedNow() {
+		log.Printf("blink/stats: Store 已关闭，丢弃 %d 秒记录", sec)
 		return
 	}
 	key := t.Format(dateKeyLayout)

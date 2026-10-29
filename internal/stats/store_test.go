@@ -1,9 +1,13 @@
 package stats
 
 import (
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"blink/internal/atomicfile"
 )
 
 // TestAddFocusAccumulatesSameDay 验证同一日期的多次专注累加。
@@ -95,5 +99,96 @@ func TestPersistRoundTrip(t *testing.T) {
 	}
 	if got.LongBreaks != 1 {
 		t.Errorf("重载后 LongBreaks=%d，应为 1", got.LongBreaks)
+	}
+}
+
+// TestLoadNullKeepsStoreWritable 覆盖合法但危险的 JSON null：旧实现会把
+// 内部 map 解成 nil，之后第一次 AddFocus/AddBreak 就会 panic。
+func TestLoadNullKeepsStoreWritable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stats.json")
+	if err := os.WriteFile(path, []byte("null"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(path)
+	t0 := time.Date(2026, 7, 15, 10, 0, 0, 0, time.Local)
+	s.AddFocus(t0, 60)
+	s.flush()
+
+	reloaded := New(path)
+	if got := reloaded.GetDay(2026, time.July, 15).FocusSec; got != 60 {
+		t.Fatalf("null 统计文件恢复后写入失败：FocusSec=%d，应为 60", got)
+	}
+}
+
+// TestConcurrentCloseIsSafe 固定 Store 的生命周期契约：Close 可能被并发
+// 调用，不能因重复关闭 stopCh 而 panic。
+func TestConcurrentCloseIsSafe(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), "stats.json"))
+	s.Start()
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			s.Close()
+		}()
+	}
+	close(start)
+	wg.Wait()
+}
+
+// TestFlushDoesNotBlockWrites 固定 flush 的锁粒度契约：落盘（序列化 + 磁盘
+// 写入 + fsync）不得发生在数据锁内。
+//
+// 缺陷：AddFocus/AddBreak 由引擎在阶段切换时调用，早期实现里 flush 在 s.mu
+// 内写盘，于是磁盘变慢（首次写入、iCloud/Time Machine 同步目录、APFS 快照）
+// 时记录调用会被 fsync 阻塞。既然 flush 的并发安全只要求「不丢新数据」，用
+// writeMu 串行化写盘 + 锁内只取快照即可，无需让读路径陪着等磁盘。
+func TestFlushDoesNotBlockWrites(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), "stats.json"))
+
+	writeStarted := make(chan struct{})
+	releaseWrite := make(chan struct{})
+	var once sync.Once
+	s.writeFile = func(path string, data []byte, perm os.FileMode) error {
+		once.Do(func() {
+			close(writeStarted)
+			<-releaseWrite
+		})
+		return atomicfile.WriteFile(path, data, perm)
+	}
+
+	s.AddFocus(time.Now(), 60)
+	flushed := make(chan struct{})
+	go func() {
+		s.flush()
+		close(flushed)
+	}()
+
+	<-writeStarted // 落盘进行中
+
+	addDone := make(chan struct{})
+	go func() {
+		s.AddFocus(time.Now(), 30)
+		close(addDone)
+	}()
+	select {
+	case <-addDone:
+	case <-time.After(time.Second):
+		close(releaseWrite)
+		t.Fatal("写盘期间 AddFocus 被阻塞：磁盘 IO 仍在数据锁内")
+	}
+
+	close(releaseWrite)
+	<-flushed
+
+	// 写盘期间的新数据必须仍然会在下一次 flush 落盘，不被旧快照丢掉。
+	s.flush()
+	if got := s.GetDay(time.Now().Year(), time.Now().Month(), time.Now().Day()).FocusSec; got != 90 {
+		t.Errorf("FocusSec=%d，应为 90", got)
 	}
 }
