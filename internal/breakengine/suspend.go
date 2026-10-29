@@ -14,9 +14,9 @@ import (
 // 会议/媒体检测随主循环每秒执行一次（见 Engine.loop）：与空闲检测
 // （5 秒）相比更频繁，让播放/会议结束后的自动恢复几乎无感（≤1 秒）。
 
-// resetExternalState 清除外部检测状态。Start 时调用：引擎停止期间
-// 检测标志停留在旧值，直接重启会吞掉"条件仍活跃"的边沿，导致
-// 会议/媒体进行中重启引擎却不自动暂停。
+// resetExternalState 清除外部检测状态。每次 startFocus 都会调用：
+// 引擎停止或进入新周期时，旧的“条件已活跃”标志必须失效，否则条件
+// 持续存在会吞掉新周期的边沿，导致会议/媒体进行中计时器却继续运行。
 func (e *Engine) resetExternalState() {
 	e.meeting = false
 	e.media = false
@@ -113,7 +113,7 @@ func (e *Engine) checkExternalSuspend() {
 // probeExternal 在锁外读取开关，并在需要时执行音频探测。
 //
 // 摘出这个方法只有一个理由：platform.AudioActivity 是一次 CGo 调用
-//（实测约 2.3ms，见 bench_test.go 的 Disabled/Enabled 对比），绝不能
+// （实测约 2.3ms，见 bench_test.go 的 Disabled/Enabled 对比），绝不能
 // 在持有引擎锁时执行——那会让前端每一次绑定调用（GetState、
 // SaveSettings、统计查询）和主循环的 tick 都在锁上排队等掉这 2ms。
 // 因此探测被挪到临界区之外，只把"应用结果"留在锁内。

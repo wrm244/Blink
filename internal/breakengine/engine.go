@@ -23,8 +23,8 @@ const (
 	soundBreakEnd = "Glass"
 	soundPreBreak = "Tink"
 
-	tickInterval      = 1 * time.Second  // 每秒滴答一次
-	idleCheckInterval = 5 * time.Second   // 每 5 秒检查一次空闲状态
+	tickInterval      = 1 * time.Second // 每秒滴答一次
+	idleCheckInterval = 5 * time.Second // 每 5 秒检查一次空闲状态
 	// sleepGap：如果两次 tick 之间间隔超过此值，说明机器可能休眠了；
 	// 与其触发一个过期的休息，不如重置专注周期。
 	sleepGap = 5 * time.Second
@@ -88,8 +88,12 @@ type Engine struct {
 	// 生产代码不读取它。
 	emitCount int
 
+	// wants 是状态机对"当前屏幕上应该有什么窗口"的期望，由 mu 保护，
+	// 只有状态机的各个阶段会写它（见 windows.go 的 publishWants）。
+	wants winWants
+
 	stopCh  chan struct{}
-	cmdCh   chan windowCmd
+	winCh   chan winWants
 	started bool
 }
 
@@ -115,30 +119,33 @@ func (e *Engine) Start() {
 		return
 	}
 	e.started = true
-	// stopCh / cmdCh 属于"这一代"后台循环。必须以参数形式交给下面
-	// 启动的 goroutine，而不是让它们回头去读 e.stopCh / e.cmdCh 字段：
+	// stopCh / winCh 属于"这一代"后台循环。必须以参数形式交给下面
+	// 启动的 goroutine，而不是让它们回头去读 e.stopCh / e.winCh 字段：
 	// Stop() 关闭的只是当前这一代的 channel，而 Start() 会立刻换上新的。
 	// 若 goroutine 读的是字段，那么 Stop→Start 之后回到 select 的旧循环
 	// 读到的会是新一代（未关闭）的 channel，于是永远等下去——同一个引擎
 	// 从此有两套循环在驱动状态机（tick 翻倍、探测翻倍、emit 翻倍），
 	// 且因为"停止后再开始"通常是最后一次 Start，僵尸循环会活到进程退出。
 	stopCh := make(chan struct{})
-	cmdCh := make(chan windowCmd, 8)
+	// 容量 1 就够：投递的是"期望状态"而非命令队列，新期望总是覆盖
+	// 尚未消费的旧期望（见 windows.go 的 publishWants）。
+	winCh := make(chan winWants, 1)
 	e.stopCh = stopCh
-	e.cmdCh = cmdCh
+	e.winCh = winCh
 	e.app = application.Get()
 	now := time.Now()
 	e.lastTick = now
 	// 清零去重缓存：引擎重启后的第一次 emit 必须真正投递出去，
 	// 否则若新状态恰好等于停止前那次快照，前端就收不到这次重启。
 	e.lastEmitted = State{}
-	e.resetExternalState()
+	// startFocus 会同时清除会议/媒体检测的旧边沿状态，确保重启期间
+	// 条件仍活跃时首轮探测能重新触发自动暂停。
 	e.startFocus()
 	e.mu.Unlock()
 
 	go e.loop(stopCh)
 	go e.idleLoop(stopCh)
-	go e.windowLoop(stopCh, cmdCh)
+	go e.windowLoop(stopCh, winCh, e.app)
 }
 
 // IsStarted 报告引擎的后台 ticker 是否正在运行。
@@ -156,18 +163,13 @@ func (e *Engine) Stop() {
 		return
 	}
 	e.started = false
-	// 在关闭 stopCh 之前先入队隐藏命令，这样 windowLoop 有机会
-	// 在退出前处理它们（参见 windowLoop），否则 windowLoop 可能在
-	// 隐藏命令执行前就返回，导致遮罩窗口残留在屏幕上。
+	// 先把"什么都不该显示"的期望投递出去，这样 windowLoop 在退出前
+	// 必定能看到它（参见 windowLoop 的 stopCh 分支），否则 windowLoop
+	// 可能在撤掉窗口前就返回，导致遮罩残留并挡住整个屏幕。
 	e.hideNotice()
 	e.hideOverlays()
 	close(e.stopCh)
 	e.mu.Unlock()
-}
-
-// app_ 返回缓存的 Wails 应用实例，在 Start 时设置。
-func (e *Engine) app_() *application.App {
-	return e.app
 }
 
 // ---- 状态快照 ----
@@ -213,7 +215,9 @@ func (e *Engine) emit() {
 	}
 	e.lastEmitted = st
 	e.emitCount++
-	a := e.app_()
+	// emit 的所有调用点都持有 e.mu，因此这里直接读 e.app 是安全的
+	// （写侧 Start 同样在锁内）。
+	a := e.app
 	if a == nil {
 		return
 	}
@@ -254,7 +258,10 @@ func (e *Engine) tickOnce(now time.Time) {
 	// 与 probeExternal 的"锁外探测、锁内应用"纪律一致。
 	if !e.probeNeeded() {
 		e.mu.Lock()
-		e.tick(now)
+		// 见下面对 started 的说明。
+		if e.started {
+			e.tick(now)
+		}
 		e.mu.Unlock()
 		return
 	}
@@ -262,8 +269,17 @@ func (e *Engine) tickOnce(now time.Time) {
 	// 只把结果的应用与状态机推进留在临界区内。
 	meeting, media, probed := e.probeExternal()
 	e.mu.Lock()
-	e.applyExternalResult(meeting, media, probed)
-	e.tick(now)
+	// 锁外的这段时间里 Stop() 可能已经执行完：它只等锁、不会等本轮循环
+	// 收尾。若这里不检查 started 就继续 tick，那么落在阶段边界的这一次推进
+	// 会 startBreak() → publishWants({overlays:true})，而停止时 windowLoop
+	// 的 select 里 stopCh 已关闭、winCh 又刚有值，两者随机选中——选中 winCh
+	// 就会弹出一个 ScreenSaver 级别的全屏遮罩。此后没有任何 goroutine 会
+	// 撤掉它（本代 windowLoop 已退出，新的一代还没起来），用户只能强杀进程。
+	// 一次性 closure 同理（close(stopCh) 只是通知，不阻塞在途 goroutine）。
+	if e.started {
+		e.applyExternalResult(meeting, media, probed)
+		e.tick(now)
+	}
 	e.mu.Unlock()
 }
 
@@ -294,25 +310,16 @@ func (e *Engine) idleLoop(stopCh chan struct{}) {
 		case <-ticker.C:
 			idle := time.Duration(platform.IdleSeconds()) * time.Second
 			e.mu.Lock()
+			// 与 tickOnce 同理：stopCh 已关闭、但本 goroutine 已走到这一分支时，
+			// 它仍会在引擎停止后改状态、投递窗口期望。
+			if !e.started {
+				e.mu.Unlock()
+				return
+			}
 			threshold := time.Duration(e.settings.IdleThresholdMin) * time.Minute
 			wasIdle := e.idle
 			if idle >= threshold {
-				e.idle = true
-				// 仅对专注流程执行空闲暂停；不打断正在进行的休息，
-				// 也不影响用户手动暂停。检查 e.paused（实时布尔值）
-				// 而非阶段值，因为 Pause() 在不改变阶段的情况下冻结倒计时，
-				// 所以暂停的引擎在这里仍然报告 PhaseFocusing。
-				if e.phase != PhaseIdle && !e.phase.IsBreak() && !e.paused {
-					// 进入空闲前，记录已专注的时长（否则这部分会丢失）。
-					if e.phase == PhaseFocusing && !e.phaseStart.IsZero() {
-						e.recordFocus()
-					}
-					e.phase = PhaseIdle
-					log.Printf("blink/breakengine: 空闲阈值达到（%s），专注计时器保持满值", threshold)
-					e.hideNotice()
-					e.hideOverlays()
-					e.emit()
-				}
+				e.enterIdle(threshold)
 			} else {
 				e.idle = false
 				if wasIdle && e.phase == PhaseIdle {
@@ -323,4 +330,24 @@ func (e *Engine) idleLoop(stopCh chan struct{}) {
 			e.mu.Unlock()
 		}
 	}
+}
+
+// enterIdle 将非休息阶段切换到 PhaseIdle。调用者持有 e.mu。
+// 无论从专注还是预提醒进入，对外都必须报告一个完整的新专注周期；
+// 特别是预提醒阶段的 total 只有几秒，若直接沿用会把空闲倒计时显示成
+// 0:10 之类的错误值。休息和手动暂停不会被打断，只记录用户仍处于空闲。
+func (e *Engine) enterIdle(threshold time.Duration) {
+	e.idle = true
+	if e.phase == PhaseIdle || e.phase.IsBreak() || e.paused {
+		return
+	}
+	// 进入空闲前记录已专注的时长（预提醒阶段已在创建提醒时记录过）。
+	if e.phase == PhaseFocusing && !e.phaseStart.IsZero() {
+		e.recordFocus()
+	}
+	e.setPhase(PhaseIdle, e.focusDur())
+	log.Printf("blink/breakengine: 空闲阈值达到（%s），专注计时器保持满值", threshold)
+	e.hideNotice()
+	e.hideOverlays()
+	e.emit()
 }

@@ -137,6 +137,27 @@ func TestAutoSuspendSkipsBreaks(t *testing.T) {
 	}
 }
 
+// TestAutoSuspendReappliesAfterManualBreak 验证用户在自动暂停期间手动
+// 开始休息时，旧的 meeting 边沿不会跨周期残留。休息结束后条件仍活跃，
+// 新的专注周期必须再次自动暂停，而不是在会议中继续倒计时。
+func TestAutoSuspendReappliesAfterManualBreak(t *testing.T) {
+	e := newTestEngine()
+	startEngine(e)
+	e.applyExternalSuspend(true, false)
+	if !e.paused || !e.autoPaused {
+		t.Fatal("设置：会议开始未触发自动暂停")
+	}
+
+	e.startBreak()
+	e.endBreak()
+	// 模拟休息结束后的下一轮音频探测：会议仍在进行。
+	e.applyExternalSuspend(true, false)
+
+	if !e.paused || !e.autoPaused {
+		t.Fatalf("休息结束后的新专注周期未重新自动暂停：paused=%v autoPaused=%v", e.paused, e.autoPaused)
+	}
+}
+
 // TestAutoSuspendDuringManualPause 验证用户已手动暂停时，
 // 检测到会议不覆盖用户状态，也不改变自动暂停标记。
 func TestAutoSuspendDuringManualPause(t *testing.T) {

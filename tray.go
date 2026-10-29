@@ -5,21 +5,22 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"blink/internal/breakengine"
 	"blink/internal/platform"
 )
 
 var (
-	tray                  *application.SystemTray
-	statusItem            *application.MenuItem
-	menuItemTakeBreak     *application.MenuItem
-	menuItemSkip          *application.MenuItem
-	menuItemPostpone      *application.MenuItem
-	menuItemPauseResume   *application.MenuItem
-	menuItemStart         *application.MenuItem
-	menuItemReset         *application.MenuItem
-	menuItemStats         *application.MenuItem
-	menuItemPreferences   *application.MenuItem
-	menuItemQuit          *application.MenuItem
+	tray                *application.SystemTray
+	statusItem          *application.MenuItem
+	menuItemTakeBreak   *application.MenuItem
+	menuItemSkip        *application.MenuItem
+	menuItemPostpone    *application.MenuItem
+	menuItemPauseResume *application.MenuItem
+	menuItemStart       *application.MenuItem
+	menuItemReset       *application.MenuItem
+	menuItemStats       *application.MenuItem
+	menuItemPreferences *application.MenuItem
+	menuItemQuit        *application.MenuItem
 	// menuLang 持有当前托盘菜单语言。它被 trayStatusLoop（以及运行在
 	// 主线程的菜单点击处理器）读取，被 setMenuLanguage（SaveSettings
 	// 在 goroutine 上分发）写入。使用 atomic.Value 而非裸字符串，
@@ -41,32 +42,32 @@ func menuLangString() string {
 // 而非在 webview 中。
 var trayStrings = map[string]map[string]string{
 	"zh-CN": {
-		"takeBreak":   "立即开始休息",
-		"skip":        "跳过休息",
-		"postpone":    "推迟休息",
-		"pauseResume": "暂停 / 继续",
-		"startFocus":  "开始专注",
-		"reset":       "重置周期",
-		"stats":       "统计…",
-		"preferences": "设置…",
-		"quit":        "退出 Blink",
-		"statusIdle":  "空闲",
+		"takeBreak":         "立即开始休息",
+		"skip":              "跳过休息",
+		"postpone":          "推迟休息",
+		"pauseResume":       "暂停 / 继续",
+		"startFocus":        "开始专注",
+		"reset":             "重置周期",
+		"stats":             "统计…",
+		"preferences":       "设置…",
+		"quit":              "退出 Blink",
+		"statusIdle":        "空闲",
 		"statusAutoMeeting": "会议/通话中，计时已暂停",
-		"statusAutoMedia":    "媒体播放中，计时已暂停",
+		"statusAutoMedia":   "媒体播放中，计时已暂停",
 	},
 	"en": {
-		"takeBreak":   "Take a break now",
-		"skip":        "Skip break",
-		"postpone":    "Postpone break",
-		"pauseResume": "Pause / Resume",
-		"startFocus":  "Start focusing",
-		"reset":       "Reset cycle",
-		"stats":       "Statistics…",
-		"preferences": "Preferences…",
-		"quit":        "Quit Blink",
-		"statusIdle":  "Idle",
+		"takeBreak":         "Take a break now",
+		"skip":              "Skip break",
+		"postpone":          "Postpone break",
+		"pauseResume":       "Pause / Resume",
+		"startFocus":        "Start focusing",
+		"reset":             "Reset cycle",
+		"stats":             "Statistics…",
+		"preferences":       "Preferences…",
+		"quit":              "Quit Blink",
+		"statusIdle":        "Idle",
 		"statusAutoMeeting": "In a meeting/call, timer paused",
-		"statusAutoMedia":    "Media playing, timer paused",
+		"statusAutoMedia":   "Media playing, timer paused",
 	},
 }
 
@@ -209,7 +210,11 @@ func togglePause() {
 	if !engine.IsStarted() {
 		return
 	}
-	if engine.GetState().Paused {
+	st := engine.GetState()
+	// 空闲和手动暂停在 UI 上都呈现为“已暂停”；Resume 会针对空闲状态
+	// 重新开始完整专注周期，因此这里不能只看 Paused，否则空闲时点击
+	// “暂停 / 继续”会调用 Pause() 并被其空操作守卫吞掉。
+	if st.Paused || st.Phase == breakengine.PhaseIdle {
 		engine.Resume()
 	} else {
 		engine.Pause()

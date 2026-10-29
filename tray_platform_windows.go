@@ -27,10 +27,10 @@ var trayIcon []byte
 //     分别由 WM_LBUTTONUP / WM_RBUTTONUP / WM_LBUTTONDBLCLK 分发到对应的
 //     handler，菜单也不会自动弹出，必须由 handler 显式调用 OpenMenu()。
 //     按 Windows 托盘惯例配置如下交互：
-//       · 右键 → 弹出菜单（OnRightClick）
-//       · 双击左键 → 打开设置页（OnDoubleClick）
-//       · 左键单击 → 不打开菜单（既不与 macOS 的左键跟踪冲突，也不会让
-//         用户误触弹菜单）
+//     · 右键 → 弹出菜单（OnRightClick）
+//     · 双击左键 → 打开设置页（OnDoubleClick）
+//     · 左键单击 → 不打开菜单（既不与 macOS 的左键跟踪冲突，也不会让
+//     用户误触弹菜单）
 func applyTrayPlatform(t *application.SystemTray, menu *application.Menu) {
 	t.SetIcon(trayIcon)
 	// 右键弹出菜单，符合 Windows 托盘惯例。

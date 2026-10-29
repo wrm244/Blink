@@ -18,8 +18,8 @@ var assets embed.FS
 
 // 包级句柄，在 main 中装配，由辅助 goroutine 读取。
 var (
-	app    *application.App
-	engine *breakengine.Engine
+	app        *application.App
+	engine     *breakengine.Engine
 	statsStore *stats.Store
 )
 

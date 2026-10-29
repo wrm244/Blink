@@ -62,6 +62,15 @@ func (e *Engine) startFocus() {
 	if e.phase == PhaseFocusing && !e.phaseStart.IsZero() {
 		e.recordFocus()
 	}
+	// 新专注周期意味着旧阶段检测到的会议/媒体边沿已经过期。清空标志后，
+	// 若用户仍在会议/媒体中，下一轮探测会重新形成边沿并自动暂停。
+	e.resetExternalState()
+	// 新专注周期也不再是空闲状态。入参路径不都是"已清过 idle"：
+	// PostponeBreak、检测到休眠间隔、以及 Resume 之外的直接调用
+	// 都可能从 PhaseIdle 进来，那里 idle 仍为 true。若不清掉，快照会
+	// 出现 phase=focusing 且 idle=true 的自相矛盾状态（至少在下一个
+	// 5s 空闲轮询之前），托盘据此显示"已暂停"、前端也不敢推进进度条。
+	e.idle = false
 	e.setPhase(PhaseFocusing, e.focusDur())
 	e.hideNotice()
 	e.hideOverlays()
