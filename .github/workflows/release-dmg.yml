@@ -103,12 +103,32 @@ jobs:
           path: ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
 
+      # 用 annotated tag 的正文当 release 说明：commit 历史里已经有详细的中文
+      # 变更说明，而 generate_release_notes 只看 PR，本项目直接推 master 时
+      # 只会得到一行 "Full Changelog"。轻量 tag 取不到正文时回退到自动生成。
+      - name: Collect release notes from tag message
+        if: startsWith(github.ref, 'refs/tags/')
+        id: notes
+        run: |
+          git fetch --force --tags origin >/dev/null 2>&1 || true
+          # 标签正文的第一行通常就是版本号，而 release 标题已经带了版本号。
+          BODY=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" \
+            | awk -v t="$GITHUB_REF_NAME" 'NR==1 && $0==t {next} {print}')
+          if [ -z "$(printf '%s' "$BODY" | tr -d '[:space:]')" ]; then
+            echo "Tag has no annotation, falling back to generated notes."
+            echo "path=" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$BODY" > release-notes.md
+            echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Attach DMG to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.dmg.outputs.path }}
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.path == '' }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}   # v0.2.0-beta1 -> prerelease
         env:
