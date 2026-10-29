@@ -156,6 +156,7 @@ wails3 task darwin:dmg          # -> bin/Blink-<version>-<arch>.dmg
 - [x] 会议/通话检测 —— 视频会议时自动暂停
 - [x] 媒体播放检测 —— 看视频时自动暂停
 - [x] 统计面板 —— 每日/每周休息完成率
+- [x] 每日专注目标 —— 统计页进度环，实时显示今日目标完成度
 - [x] Windows / Linux 支持
 - [ ] Apple Developer ID 签名 + 公证
 

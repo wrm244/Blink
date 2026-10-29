@@ -33,7 +33,7 @@ wails3 task darwin:dmg                  # distributable DMG
 
 - **Never call Wails window APIs (`Show`, `Hide`, `Focus`, `NewWithOptions`) from the main thread** — they block on `InvokeSync` and deadlock. Dispatch to a goroutine first.
 - The engine mutex must never be held while calling Wails window APIs.
-- The state machine only sends commands to `windowLoop` via the buffered channel `cmdCh`; overlay windows are closed (destroyed), not hidden, when breaks end.
+- The state machine only publishes the desired window state to `windowLoop` via the capacity-1 `winCh` (latest wins); overlay windows are closed (destroyed), not hidden, when breaks end.
 - `shortcuts.go` rebinding is serialized by `rebindMu`; safe from any goroutine.
 
 ## Risk controls
