@@ -11,3 +11,5 @@ build/android/overlay.json
 build/android/gen/
 .reasonix/
 .workbuddy/
+# Build artifacts at repo root (wails3 build / go build -o blink)
+/blink
