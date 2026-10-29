@@ -2,7 +2,7 @@
 // StatsTab - 统计标签页：日历热力图 + 当月汇总 + 选中日详情列表。
 import GlassPanel from '@/components/GlassPanel.vue'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee, Activity, CalendarCheck, Zap, Hourglass } from '@lucide/vue'
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { BreakService } from '@bindings/blink'
@@ -10,6 +10,12 @@ import { useStatsData, fmtDuration, fmtMinutes, intensity } from '@/composables/
 import type { State } from '@bindings/blink/internal/breakengine/models'
 
 const { t, locale } = useI18n()
+// goalMin：来自设置的每日专注目标（分钟），0 表示未设目标。
+// 由 Settings.vue 透传而非在统计页自己读设置：设置页是设置的唯一
+// 真源（它维护未保存的编辑与 savedSnapshot），这里再读一次会与
+// 用户刚改但未保存的值冲突。
+const props = defineProps<{ goalMin?: number }>()
+const goalMinutes = computed(() => Math.max(0, props.goalMin ?? 0))
 // 时长格式化按界面语言输出（fmtDuration 不依赖 vue-i18n，需手动传）。
 const durLocale = computed(() => (locale.value === 'zh-CN' ? 'zh' : 'en'))
 const { year, month, dayMap, loading, selectedDay, monthSummary, selectedStats, reload, prevMonth, nextMonth, prevYear, nextYear, goToday } = useStatsData()
@@ -51,7 +57,7 @@ const calendarCells = computed<Cell[]>(() => {
   if (weekStartsOnMonday.value) {
     startDow = startDow === 0 ? 6 : startDow - 1
   }
-  const today = new Date()
+  const today = todayDate.value
   const cells: Cell[] = []
   // 前导空格
   for (let i = 0; i < startDow; i++) {
@@ -83,6 +89,29 @@ function selectDay(d: number) {
   selectedDay.value = d
 }
 
+// ---- 今日目标进度 ----
+// todayKey 是"今天"的响应式来源：设置窗口可能常驻整夜（菜单栏应用本来
+// 就不退出），而 new Date() 不参与响应式，跨夜后 isCurrentMonth 会拿旧
+// 月份去取 dayMap[1]，把 1 月 31 日的进度显示成 2 月 1 日的进度。
+const todayKey = ref(new Date().toDateString())
+const todayDate = computed(() => new Date(todayKey.value))
+// 目标只对"当前真实月份"有意义：翻到历史/以后月份时隐藏，
+// 否则会拿本月今天的数据去配上一个空日期的目标，读起来很怪。
+const isCurrentMonth = computed(() => {
+  const now = todayDate.value
+  return year.value === now.getFullYear() && month.value === now.getMonth() + 1
+})
+const todayFocusSec = computed(() => {
+  if (!isCurrentMonth.value) return 0
+  return dayMap.value[todayDate.value.getDate()]?.focusSec || 0
+})
+const showGoal = computed(() => goalMinutes.value > 0 && isCurrentMonth.value)
+const goalTargetSec = computed(() => goalMinutes.value * 60)
+const goalPct = computed(() => (goalTargetSec.value > 0 ? Math.min(1, todayFocusSec.value / goalTargetSec.value) : 0))
+const goalRemainSec = computed(() => Math.max(0, goalTargetSec.value - todayFocusSec.value))
+// 进度环半径 26，周长用于 dasharray/dashoffset。
+const goalRingC = 2 * Math.PI * 26
+
 const monthLabel = computed(() => monthNames.value[month.value - 1])
 
 // 选中日日期文案：中文 "2026年9月5日"，英文 "Sep 5, 2026"
@@ -99,6 +128,13 @@ let offTick: (() => void) | undefined
 onMounted(() => {
   reload()
   offTick = Events.On('blink:tick', (ev: { data: State }) => {
+    // 跨日：刷新"今天"并重新拉数据，否则今日目标进度和日历高亮都停在昨天。
+    const tk = new Date().toDateString()
+    if (tk !== todayKey.value) {
+      todayKey.value = tk
+      reload()
+      return
+    }
     const phase = ev.data?.phase
     if (!phase) return
     // 休息结束：上一刻是 break，现在不是 break（切回 focus/prebreak/idle）。
@@ -139,6 +175,34 @@ onUnmounted(() => offTick?.())
         <div class="summary__cell">
           <div class="summary__value tabular-nums">{{ monthSummary.activeDays }}</div>
           <div class="summary__label"><CalendarCheck class="size-3" />{{ t('stats.activeDays') }}</div>
+        </div>
+      </div>
+    </GlassPanel>
+
+    <!-- 今日目标进度：仅在设了目标且正在看当前月时出现 -->
+    <GlassPanel v-if="showGoal" class="goal" :class="{ 'goal--done': goalPct >= 1 }">
+      <div class="goal__ring">
+        <svg viewBox="0 0 64 64" class="goal__svg" role="img" :aria-label="t('stats.todayGoal')">
+          <circle class="goal__track" cx="32" cy="32" r="26" />
+          <circle
+            class="goal__fill"
+            cx="32" cy="32" r="26"
+            :stroke-dasharray="goalRingC"
+            :stroke-dashoffset="goalRingC * (1 - goalPct)"
+          />
+        </svg>
+        <span class="goal__pct tabular-nums">{{ Math.round(goalPct * 100) }}%</span>
+      </div>
+      <div class="goal__info">
+        <div class="goal__title">{{ t('stats.todayGoal') }}</div>
+        <div class="goal__value tabular-nums">
+          {{ fmtDuration(todayFocusSec, durLocale) }}
+          <span class="goal__sep">/</span>
+          {{ fmtDuration(goalTargetSec, durLocale) }}
+        </div>
+        <div class="goal__hint">
+          <template v-if="goalPct >= 1">{{ t('stats.goalDone') }}</template>
+          <template v-else>{{ t('stats.goalRemain') }} {{ fmtDuration(goalRemainSec, durLocale) }}</template>
         </div>
       </div>
     </GlassPanel>
@@ -243,6 +307,24 @@ onUnmounted(() => offTick?.())
 .summary__cell { text-align: center; padding: 10px 6px; border-radius: 10px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
 .summary__value { font-size: 18px; font-weight: 300; color: var(--text); line-height: 1.2; }
 .summary__label { font-size: 11px; color: var(--text-faint); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+
+/* ---- 今日目标 ---- */
+.goal { display: flex; align-items: center; gap: 18px; padding: 16px 20px; }
+.goal__ring { position: relative; display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; }
+.goal__svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.goal__track { fill: none; stroke: var(--track); stroke-width: 6; }
+.goal__fill {
+  fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s ease;
+}
+.goal--done .goal__fill { stroke: #30a14e; }
+.goal__pct { font-size: 13px; font-weight: 500; color: var(--text); }
+.goal__info { min-width: 0; }
+.goal__title { font-size: 11.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.goal__value { font-size: 17px; font-weight: 300; color: var(--text); margin-top: 3px; line-height: 1.3; }
+.goal__sep { color: var(--text-faint); margin: 0 2px; }
+.goal__hint { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.goal--done .goal__hint { color: #30a14e; }
 
 /* ---- 日历 ---- */
 .calendar { padding: 16px 18px; }

@@ -9,7 +9,7 @@ import OptionsTab from '@/components/SettingsTabs/OptionsTab.vue'
 import ShortcutsTab from '@/components/SettingsTabs/ShortcutsTab.vue'
 import StatsTab from '@/components/SettingsTabs/StatsTab.vue'
 import AboutTab from '@/components/SettingsTabs/AboutTab.vue'
-import { setLocale, type Locale } from '@/i18n'
+import { applyLocalePreference, setLocale, type Locale } from '@/i18n'
 import { applyTheme, type Theme } from '@/theme'
 import { Check, Clock, Coffee, Info, Keyboard, Languages, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pause, Play, RotateCcw, Sparkles, Sun, Timer, TrendingUp } from '@lucide/vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -27,7 +27,7 @@ const tab = ref('timing')
 const collapsed = ref(false)
 
 // 引擎状态与控制
-const { s, state, dirty, saved, ready, touch, save, discard, completeOnboarding, applyExternal } = useEngineState()
+const { s, state, dirty, saved, ready, loaded, touch, save, discard, completeOnboarding, applyExternal } = useEngineState()
 
 // ---- 关闭确认弹窗（Windows）----
 // Go 端拦下窗口关闭后发来 blink:close-request，由这里弹窗询问；
@@ -62,15 +62,32 @@ function resolveClose(action: 'background' | 'quit' | 'cancel', remember: boolea
   BreakService.ResolveClose(action, remember)
 }
 
-// 数据加载完成、界面渲染就绪后通知 Go 端显示窗口，避免白屏
+// 数据加载完成、界面渲染就绪后通知 Go 端显示窗口，避免白屏。
+// immediate: 组件挂载时 ready 可能已经是 true（Vue 3.4 起 watch 默认只在
+// 变化时触发），少了它窗口就不会显示。
 watch(ready, async (v) => {
   if (v) {
+    // 后端设置是主题/语言的最终来源；启动早期使用 localStorage 只为避免
+    // 闪烁，这里再做一次校准，也能修复上一次“放弃更改”留下的缓存。
+    // 但必须确认设置真的读到了：读失败时 s 是空对象，这里的校准会把
+    // 'system' 和空语言写回 localStorage，静默抹掉用户记住的选择。
+    if (loaded.value) {
+      applyTheme((s.theme || 'system') as Theme)
+      applyLocalePreference(s.language || '')
+    }
     // 托盘菜单的"统计"项会设置 pending nav，ready 后读取并切换。
-    const nav = await BreakService.GetPendingNav()
-    if (nav) tab.value = nav
-    BreakService.ShowWindow()
+    // 读取失败不能阻断 ShowWindow：窗口是 Hidden 创建的，不调它就一直
+    // 不出现（用户感知为“点了设置却没反应”）。
+    try {
+      const nav = await BreakService.GetPendingNav()
+      if (nav) tab.value = nav
+    } catch (err) {
+      console.error('读取待处理导航失败', err)
+    } finally {
+      BreakService.ShowWindow()
+    }
   }
-})
+}, { immediate: true })
 
 // 周期状态派生
 const { onboarded, isPaused, isBreak, cycleRunning, progress, heroTitle, heroSub, phaseColor, heroTime, shortDone, breaksUntilLong, cycleStatusText } = useCycleStatus(state, s)
@@ -84,6 +101,13 @@ const { shortcutRows, conflictFor } = useShortcutsConfig(s, touch)
 // ---- 主题与语言切换 ----
 function changeLanguage(v: string) { setLocale(v as Locale); locale.value = v; s.language = v; touch() }
 function changeTheme(v: string) { s.theme = v; applyTheme(v as Theme); touch() }
+function discardChanges() {
+  discard()
+  // 没读到后端设置时 s 是空的，回退主题/语言只会把临时值固化成"用户选择"。
+  if (!loaded.value) return
+  applyTheme((s.theme || 'system') as Theme)
+  applyLocalePreference(s.language || '')
+}
 
 function startBreak() { BreakService.StartBreakNow() }
 function togglePause() { isPaused.value ? BreakService.Resume() : BreakService.Pause() }
@@ -265,7 +289,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
               :shortcut-rows="shortcutRows" :conflict-for="conflictFor"
               @set-shortcut="(k, v) => { (s as any)[k] = v; touch() }"
             />
-            <StatsTab v-show="tab === 'stats'" />
+            <StatsTab v-show="tab === 'stats'" :goal-min="s.dailyGoalMin ?? 0" />
             <AboutTab v-show="tab === 'about'" />
           </div>
 
@@ -278,7 +302,7 @@ const showSaveBar = computed(() => onboarded.value && editTabs.includes(tab.valu
                 <span v-else class="savebar__idle">{{ t('actions.saved') }}</span>
               </div>
               <div class="savebar__right">
-                <GButton v-if="dirty" variant="ghost" size="sm" @click="discard">{{ t('actions.discard') }}</GButton>
+                <GButton v-if="dirty" variant="ghost" size="sm" @click="discardChanges">{{ t('actions.discard') }}</GButton>
                 <GButton variant="primary" size="sm" :disabled="!dirty" @click="save">
                   <Check class="size-3.5" />
                   {{ t('actions.save') }}

@@ -40,6 +40,13 @@ export interface Settings {
     "idleThresholdMin": number;
 
     /**
+     * DailyGoalMin 是每日专注目标（分钟），仅用于统计页的目标进度环，
+     * 不参与状态机判定。0 表示不设目标（默认），因此它不是"未设置时
+     * 回退默认值"的字段——见 withDefaults。
+     */
+    "dailyGoalMin": number;
+
+    /**
      * EnableLongBreaks 切换偶尔的长休息循环。
      */
     "enableLongBreaks": boolean;

@@ -34,6 +34,9 @@ const longBreakPresets = [5, 10, 15, 20]
 const intervalPresets = [2, 3, 4, 5]
 const preWarnPresets = [0, 10, 15, 30, 60]
 const idlePresets = [1, 3, 5, 10, 15]
+// 每日专注目标（分钟）：0 = 关闭。2 小时是多数"每天专注多久"建议的中位数，
+// 预设从关闭到 8 小时便于快速选。
+const goalPresets = [0, 60, 120, 240, 360, 480]
 
 /** 将秒数格式化为友好的中文标签 */
 function fmtSecs(v: number): string {
@@ -63,6 +66,18 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
   const chipWarn = (v: number) => (v === 0 ? t('timing.off') : fmtSecsChip(v))
   /** 休息前提醒的完整显示：0 显示"关闭" */
   const fmtWarn = (v: number) => (v === 0 ? t('timing.off') : fmtSecs(v))
+  /** 每日目标的 chip：0 显示"关闭" */
+  const chipGoal = (v: number) => (v === 0 ? t('timing.off') : fmtSecsChip(v * 60))
+  /** 每日目标的完整显示：0 显示"关闭"，否则按 x 小时 y 分显示 */
+  const fmtGoal = (v: number) => {
+    if (v === 0) return t('timing.off')
+    const h = Math.floor(v / 60)
+    const m = v % 60
+    if (h === 0) return fmtMinutes(m)
+    // 小时单位也走 i18n：中文「8 小时」、英文「8 h」。
+    const hh = `${h} ${t('timing.hours')}`
+    return m === 0 ? hh : `${hh} ${m} ${t('timing.minutes')}`
+  }
 
   // 计时字段定义
   const timingFields = computed<TimingField[]>(() => [
@@ -119,6 +134,15 @@ export function useTimingConfig(s: Reactive<Settings>, touch: () => void) {
       min: 1, max: 30, step: 1,
       presets: idlePresets,
       formatValue: fmtMinutes,
+    },
+    {
+      key: 'dailyGoalMin',
+      label: t('timing.dailyGoal'),
+      desc: t('timing.dailyGoalDesc'),
+      min: 0, max: 480, step: 15,
+      presets: goalPresets,
+      formatChip: chipGoal,
+      formatValue: fmtGoal,
     },
   ])
 

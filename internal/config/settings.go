@@ -40,6 +40,10 @@ type Settings struct {
 	// IdleThresholdMin：不活动超过此时长后，专注计时器被视为暂停，
 	// 活动恢复时重置。
 	IdleThresholdMin int `json:"idleThresholdMin"`
+	// DailyGoalMin 是每日专注目标（分钟），仅用于统计页的目标进度环，
+	// 不参与状态机判定。0 表示不设目标（默认），因此它不是"未设置时
+	// 回退默认值"的字段——见 withDefaults。
+	DailyGoalMin int `json:"dailyGoalMin"`
 	// EnableLongBreaks 切换偶尔的长休息循环。
 	EnableLongBreaks bool `json:"enableLongBreaks"`
 	// SoundEnabled 切换休息结束提示音和休息前提醒音。
@@ -87,7 +91,7 @@ func Default() Settings {
 		FocusDurationMin:      20,
 		ShortBreakDurationSec: 20,
 		LongBreakDurationMin:  5,
-		LongBreakInterval:      4,
+		LongBreakInterval:     4,
 		PreBreakWarningSec:    10,
 		IdleThresholdMin:      5,
 		EnableLongBreaks:      true,
@@ -162,18 +166,17 @@ func (s Settings) withDefaults() Settings {
 	if s.IdleThresholdMin < 1 {
 		s.IdleThresholdMin = d.IdleThresholdMin
 	}
-	if s.ShortcutStartBreak == "" {
-		s.ShortcutStartBreak = d.ShortcutStartBreak
+	// DailyGoalMin 的 0 是合法值（不设目标），不能用"小于 1 回退默认"的
+	// 规则，否则用户关掉目标后一重启就复活。只夹取非法范围。
+	if s.DailyGoalMin < 0 {
+		s.DailyGoalMin = 0
 	}
-	if s.ShortcutSkipBreak == "" {
-		s.ShortcutSkipBreak = d.ShortcutSkipBreak
+	if s.DailyGoalMin > maxDailyGoalMin {
+		s.DailyGoalMin = maxDailyGoalMin
 	}
-	if s.ShortcutPostponeBreak == "" {
-		s.ShortcutPostponeBreak = d.ShortcutPostponeBreak
-	}
-	if s.ShortcutPreferences == "" {
-		s.ShortcutPreferences = d.ShortcutPreferences
-	}
+	// 空快捷键是有意义的用户选择（禁用该操作）。Load 先把 JSON 解码到
+	// Default()，因此旧文件中缺失的字段天然会保留默认值；这里不能再把
+	// 显式保存的空串补回默认值，否则用户在设置页清空快捷键后一重启就会复活。
 	s.ShortcutStartBreak = normalizeAccelerator(s.ShortcutStartBreak)
 	s.ShortcutSkipBreak = normalizeAccelerator(s.ShortcutSkipBreak)
 	s.ShortcutPostponeBreak = normalizeAccelerator(s.ShortcutPostponeBreak)
@@ -188,8 +191,14 @@ func (s Settings) withDefaults() Settings {
 	return s
 }
 
+// maxDailyGoalMin 是每日专注目标的上限（8 小时）。用于夹取手滑写入的异常
+// 配置，同时与设置页时间字段的 max（480 分钟）保持一致——两边不一致时，
+// 存量文件中大于前端上限的值会让步进器点一下「−」就跳到 min(max-步长) 上，
+// 用户会觉得数字被凭空吃掉。
+const maxDailyGoalMin = 8 * 60
+
 // configPath 返回设置文件的路径。它位于 OS 的用户级应用支持目录下
-//（macOS 上为 ~/Library/Application Support），用户通常不需要手动编辑。
+// （macOS 上为 ~/Library/Application Support），用户通常不需要手动编辑。
 func configPath() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -222,6 +231,11 @@ func Load() (Settings, error) {
 
 // Save 将设置写入磁盘，必要时创建目录。
 func Save(s Settings) error {
+	// 夹取一次再写盘：Load 只在读的时候做 withDefaults，如果只靠它，
+	// 前端传下来的越界值（例如还没赶上 UI max 的旧字段、或手改过的
+	// settings.json）会被原样落盘，之后每次启动又要在内存里纠一遍，
+	// 文件与运行态长期不一致。withDefaults 是幂等的，重复调用安全。
+	s = s.withDefaults()
 	path, err := configPath()
 	if err != nil {
 		return err

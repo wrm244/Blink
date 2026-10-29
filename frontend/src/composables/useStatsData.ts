@@ -13,14 +13,19 @@ export function useStatsData() {
   const month = ref(new Date().getMonth() + 1) // 1-12
   const dayMap = ref<DayMap>({})
   const loading = ref(false)
+  // loadMonth 是异步的；用户连续翻月时，较早的请求可能较晚返回。只允许
+  // 最后一次请求提交数据，避免旧月份覆盖当前月份。
+  let loadVersion = 0
 
   // 选中日期（默认今天），用于详情列表。
   const selectedDay = ref(new Date().getDate())
 
   async function loadMonth(y: number, m: number) {
+    const version = ++loadVersion
     loading.value = true
     try {
       const raw = await BreakService.GetMonthlyStats(y, m)
+      if (version !== loadVersion) return
       // 绑定返回的是以字符串 key（"1".."31"）的可选映射对象，转为数字 key。
       const out: DayMap = {}
       for (const [k, v] of Object.entries(raw || {})) {
@@ -30,9 +35,9 @@ export function useStatsData() {
     } catch (err) {
       // 后端调用失败：保留已显示的数据，记录错误即可。
       // 若不 catch，异常会穿透所有调用点成为 unhandled rejection。
-      console.error('加载统计数据失败', err)
+      if (version === loadVersion) console.error('加载统计数据失败', err)
     } finally {
-      loading.value = false
+      if (version === loadVersion) loading.value = false
     }
   }
 

@@ -30,10 +30,18 @@ export const i18n = createI18n({
   },
 })
 
+// applyLocalePreference 应用后端保存的语言偏好。空值/未知值表示跟随系统，
+// 同时清除本地缓存，避免用户“放弃更改”后 localStorage 仍保留临时语言。
+export function applyLocalePreference(preference: string) {
+  const explicit = preference === "zh-CN" || preference === "en"
+  const locale: Locale = explicit ? preference : detectSystemLocale()
+  i18n.global.locale.value = locale
+  if (explicit) localStorage.setItem("pm:locale", locale)
+  else localStorage.removeItem("pm:locale")
+  document.documentElement.lang = locale === "zh-CN" ? "zh-Hans" : "en"
+}
+
 // setLocale 切换全局语言并持久化到 localStorage。
 export function setLocale(locale: Locale) {
-  i18n.global.locale.value = locale
-  localStorage.setItem("pm:locale", locale)
-  // 同步文档语言属性以支持无障碍访问
-  document.documentElement.lang = locale === "zh-CN" ? "zh-Hans" : "en"
+  applyLocalePreference(locale)
 }
